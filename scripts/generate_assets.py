@@ -6,7 +6,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 repo = Path(__file__).resolve().parents[1]
 asset_dir = repo / "docs/assets"
 asset_dir.mkdir(parents=True, exist_ok=True)
-hermes_src = Path("/root/clawd/repos/hermes-wt-supplog/website/static/img/logo.png")
+hermes_src = Path("/root/clawd/repos/hermes-wt-supplog/apps/desktop/assets/icon.png")
 hermes_logo_path = asset_dir / "hermes-logo.png"
 shutil.copyfile(hermes_src, hermes_logo_path)
 
@@ -22,16 +22,9 @@ mono_font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf"
 
 def make_logo(size: int) -> Image.Image:
     logo = Image.open(hermes_logo_path).convert("RGBA")
-    xs = []
-    ys = []
-    for y in range(logo.height):
-        for x in range(logo.width):
-            r, g, b, a = logo.getpixel((x, y))
-            if a > 0 and (r + g + b) / 3 < 245:
-                xs.append(x)
-                ys.append(y)
-    left, top, right, bottom = min(xs), min(ys), max(xs) + 1, max(ys) + 1
-    logo = logo.crop((left, top, right, bottom))
+    bbox = logo.getbbox()
+    if bbox:
+        logo = logo.crop(bbox)
     logo.thumbnail((size, size), Image.Resampling.LANCZOS)
     canvas = Image.new("RGBA", (size, size), (255, 255, 255, 0))
     canvas.alpha_composite(logo, ((size - logo.width) // 2, (size - logo.height) // 2))
@@ -233,5 +226,4 @@ def draw_infographic(out_path: Path, width: int = 1600, height: int = 900) -> No
 draw_word_art(
     "HERMES BRAVE SEARCH PRO", asset_dir / "hermes-brave-search-pro-banner.png"
 )
-draw_infographic(asset_dir / "brave-hermes-hero.png")
-print("created assets")
+print("created banner assets")
