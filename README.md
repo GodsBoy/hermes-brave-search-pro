@@ -1,7 +1,11 @@
 # Brave Search Pro for Hermes Agent
 
 <p align="center">
-  <img src="docs/assets/brave-hermes-hero.png" alt="Brave Search Pro for Hermes Agent hero graphic" width="920">
+  <img src="docs/assets/hermes-brave-search-pro-banner.png" alt="Hermes Brave Search Pro banner" width="920">
+</p>
+
+<p align="center">
+  <img src="docs/assets/brave-hermes-hero.png" alt="Brave Search Pro for Hermes Agent infographic" width="920">
 </p>
 
 <p align="center">
