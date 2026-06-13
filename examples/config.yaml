@@ -1,0 +1,9 @@
+# Example Hermes configuration for Brave Search Pro plus Tavily extraction.
+
+plugins:
+  enabled:
+    - brave-search
+
+web:
+  search_backend: "brave-pro"
+  extract_backend: "tavily"

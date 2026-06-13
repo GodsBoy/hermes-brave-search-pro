@@ -1,0 +1,13 @@
+name: brave-search
+version: 0.1.0
+description: Brave Search Pro provider and advanced Brave search tool for Hermes Agent
+kind: backend
+provides_tools:
+  - brave_search
+provides_web_providers:
+  - brave-pro
+requires_env:
+  - name: BRAVE_SEARCH_API_KEY
+    description: Brave Search API key
+    url: https://brave.com/search/api/
+    secret: true
