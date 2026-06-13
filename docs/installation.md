@@ -47,7 +47,7 @@ HERMES_PROFILE=myprofile ./scripts/install.sh
 Add your Brave Search key to the Hermes environment:
 
 ```bash
-BRAVE_SEARCH_API_KEY=bsa-your-key-here
+export BRAVE_SEARCH_API_KEY=bsa-your-key-here
 ```
 
 `BRAVE_API_KEY` is also accepted for compatibility, but `BRAVE_SEARCH_API_KEY` is the documented name.
@@ -69,6 +69,12 @@ With this setup:
 - `web_search` uses Brave Search Pro.
 - `web_extract` keeps using Tavily.
 - `brave_search` remains available for richer Brave modes.
+
+Restart the gateway after installing or changing plugin configuration:
+
+```bash
+hermes gateway restart
+```
 
 ## Advanced modes
 

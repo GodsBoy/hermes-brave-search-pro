@@ -45,10 +45,10 @@ Canonical Hermes install:
 hermes plugins install GodsBoy/hermes-brave-search-pro --enable
 ```
 
-Set your Brave credential in the environment Hermes runs with:
+Export your Brave credential in the environment Hermes runs with:
 
 ```bash
-BRAVE_SEARCH_API_KEY=bsa-your-key-here
+export BRAVE_SEARCH_API_KEY=bsa-your-key-here
 ```
 
 Configure Hermes to use Brave for search and Tavily for extraction:
@@ -69,6 +69,12 @@ That gives you the clean pairing:
 web_search(query="Hermes Agent plugins", limit=5)   # Brave Search Pro
 web_extract(urls=["https://example.com/article"])  # Tavily
 brave_search(query="Hermes Agent", mode="news")   # Brave-specific mode
+```
+
+Restart the gateway after installing or changing plugin configuration:
+
+```bash
+hermes gateway restart
 ```
 
 ## Advanced `brave_search` modes
@@ -183,7 +189,7 @@ web:
 
 ### Search says the API key is missing
 
-Set `BRAVE_SEARCH_API_KEY` in the environment used by the Hermes process. `BRAVE_API_KEY` is accepted as a compatibility fallback, but `BRAVE_SEARCH_API_KEY` is the documented name.
+Export `BRAVE_SEARCH_API_KEY` in the environment used by the Hermes process. `BRAVE_API_KEY` is accepted as a compatibility fallback, but `BRAVE_SEARCH_API_KEY` is the documented name.
 
 ### Extraction stopped using Tavily
 
