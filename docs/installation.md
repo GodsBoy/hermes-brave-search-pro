@@ -10,8 +10,8 @@
 ## Install from a local checkout
 
 ```bash
-git clone https://github.com/GodsBoy/brave.git
-cd brave
+git clone https://github.com/GodsBoy/hermes-brave-search-pro.git
+cd hermes-brave-search-pro
 uv pip install -e .
 ```
 
