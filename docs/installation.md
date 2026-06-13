@@ -3,25 +3,44 @@
 ## Requirements
 
 - Hermes Agent with plugin support
-- Python 3.10 or newer
 - Brave Search API key
 - Tavily configured in Hermes if you want `web_extract` to keep using Tavily
 
-## Install from a local checkout
+## Canonical Hermes install
+
+Use Hermes' plugin installer with the GitHub owner/repo shorthand:
 
 ```bash
-git clone https://github.com/GodsBoy/hermes-brave-search-pro.git
-cd hermes-brave-search-pro
-uv pip install -e .
+hermes plugins install GodsBoy/hermes-brave-search-pro --enable
 ```
 
-Then enable the plugin in Hermes:
+This installs the plugin into Hermes' plugin directory and enables the plugin named `brave-search`.
+
+## Direct user-plugin install
+
+You can also clone the repository directly into the user plugin directory:
 
 ```bash
+git clone https://github.com/GodsBoy/hermes-brave-search-pro.git \
+  ~/.hermes/plugins/brave-search
 hermes plugins enable brave-search
 ```
 
-If your Hermes install uses direct user plugin directories instead of Python entry points, copy or symlink the checkout into your Hermes plugins directory and restart Hermes.
+For a profile-specific install:
+
+```bash
+git clone https://github.com/GodsBoy/hermes-brave-search-pro.git \
+  ~/.hermes/profiles/myprofile/plugins/brave-search
+hermes --profile myprofile plugins enable brave-search
+```
+
+From an existing checkout, install a symlink:
+
+```bash
+./scripts/install.sh
+# Optional profile-aware install
+HERMES_PROFILE=myprofile ./scripts/install.sh
+```
 
 ## Configure credentials
 
@@ -65,9 +84,11 @@ The explicit `brave_search` tool supports:
 - `suggest`: query suggestions
 - `raw`: raw Brave API payload
 
-## Test locally
+## Development checkout
 
 ```bash
+git clone https://github.com/GodsBoy/hermes-brave-search-pro.git
+cd hermes-brave-search-pro
 uv venv
 uv pip install -e '.[dev]'
 uv run pytest

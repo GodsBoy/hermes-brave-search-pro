@@ -35,18 +35,10 @@ Hermes already separates search from extraction. This plugin leans into that des
 
 ## Quick start
 
-```bash
-git clone https://github.com/GodsBoy/hermes-brave-search-pro.git
-cd hermes-brave-search-pro
-uv venv
-uv pip install -e '.[dev]'
-uv run pytest
-```
-
-Enable the plugin in Hermes:
+Canonical Hermes install:
 
 ```bash
-hermes plugins enable brave-search
+hermes plugins install GodsBoy/hermes-brave-search-pro --enable
 ```
 
 Set your Brave credential in the environment Hermes runs with:
@@ -123,9 +115,43 @@ src/hermes_brave_search/
 └── tools.py        # Tool handler
 ```
 
-## Development
+## Install options
+
+Canonical Hermes install:
 
 ```bash
+hermes plugins install GodsBoy/hermes-brave-search-pro --enable
+```
+
+Direct user-plugin install:
+
+```bash
+git clone https://github.com/GodsBoy/hermes-brave-search-pro.git \
+  ~/.hermes/plugins/brave-search
+hermes plugins enable brave-search
+```
+
+Profile-specific install:
+
+```bash
+git clone https://github.com/GodsBoy/hermes-brave-search-pro.git \
+  ~/.hermes/profiles/myprofile/plugins/brave-search
+hermes --profile myprofile plugins enable brave-search
+```
+
+From an existing checkout, install a symlink:
+
+```bash
+./scripts/install.sh
+# Optional profile-aware install
+HERMES_PROFILE=myprofile ./scripts/install.sh
+```
+
+For development only:
+
+```bash
+git clone https://github.com/GodsBoy/hermes-brave-search-pro.git
+cd hermes-brave-search-pro
 uv venv
 uv pip install -e '.[dev]'
 uv run pytest
