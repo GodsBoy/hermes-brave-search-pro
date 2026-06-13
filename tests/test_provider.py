@@ -27,7 +27,7 @@ def test_register_adds_provider_and_tool():
     assert ctx.tools[0]["name"] == "brave_search"
     assert ctx.tools[0]["toolset"] == "brave_search"
     assert ctx.tools[0]["requires_env"] == ["BRAVE_SEARCH_API_KEY"]
-    assert ctx.tools[0]["emoji"] == "🎧"
+    assert ctx.tools[0]["emoji"] == "🦁"
     assert ctx.tools[0]["override"] is True
     assert callable(ctx.tools[0]["check_fn"])
 

@@ -21,7 +21,7 @@ def register(ctx) -> None:
         handler=brave_search_tool,
         check_fn=provider.is_available,
         requires_env=["BRAVE_SEARCH_API_KEY"],
-        emoji="🎧",
+        emoji="🦁",
         override=True,
         description=(
             "Search Brave Search Pro across web, answer context, media, news, "
