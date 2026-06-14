@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Contributing guide
+    url: https://github.com/GodsBoy/hermes-brave-search-pro/blob/main/CONTRIBUTING.md
+    about: How to set up, validate, and open a pull request. Read this before filing speculative work.
+  - name: Brave Search API documentation
+    url: https://brave.com/search/api/
+    about: Questions about the Brave Search API itself, credentials, or quotas belong with Brave.

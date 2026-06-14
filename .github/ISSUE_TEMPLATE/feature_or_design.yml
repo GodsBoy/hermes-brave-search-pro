@@ -1,0 +1,88 @@
+name: Feature or design proposal
+description: Propose new behavior, a new brave_search mode, configuration, or follow-up work.
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for feature requests, design proposals, and architectural follow-up. Be explicit about the problem and tradeoffs. Keep changes scoped: this plugin changes the search backend, not the Hermes tool contract.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What operator, maintainer, or user problem should this solve?
+      placeholder: There is no first-class way to request Brave's locations or summarizer payloads through the plugin.
+    validations:
+      required: true
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: User or operator impact
+      description: Who is affected and how bad is it?
+      placeholder: Operators who want Brave-specific payloads have to drop to mode=raw and parse the response by hand.
+    validations:
+      required: true
+
+  - type: textarea
+    id: direction
+    attributes:
+      label: Proposed direction
+      description: Describe the preferred behavior change. If it adds a brave_search mode or a config flag, name it.
+      placeholder: Add a brave_search mode "summary" that surfaces Brave's summarizer payload in a normalised shape.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives and tradeoffs
+      description: List other approaches considered and why they are less preferred.
+      placeholder: Parsing mode=raw client side works today but is brittle and duplicated across callers.
+    validations:
+      required: true
+
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Backward compatibility
+      description: Explain defaults, the effect on the web_search provider contract, and any config migration.
+      placeholder: New mode is opt-in via brave_search; web_search and existing modes are unchanged.
+    validations:
+      required: true
+
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation or evidence
+      description: Include prototype notes, mocked tests, logs, or links that justify the change.
+      placeholder: |
+        - Prototype branch: ...
+        - Added a mocked Brave payload test in tests/test_tools.py
+        - uv run pytest -> passes
+    validations:
+      required: false
+
+  - type: dropdown
+    id: implementation-status
+    attributes:
+      label: Implementation status
+      description: How concrete is this proposal?
+      options:
+        - Idea only
+        - Design sketched
+        - Prototype exists
+        - PR incoming
+        - PR already opened
+    validations:
+      required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional notes
+      description: Anything maintainers should know before deciding direction.
+    validations:
+      required: false
