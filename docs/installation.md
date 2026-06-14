@@ -4,7 +4,7 @@
 
 - Hermes Agent with plugin support
 - Brave Search API key
-- Tavily configured in Hermes if you want `web_extract` to keep using Tavily
+- Tavily API key if you want the recommended `web_extract` pairing. Tavily offers a free API key at <https://app.tavily.com/>.
 
 ## Canonical Hermes install
 
@@ -42,17 +42,52 @@ From an existing checkout, install a symlink:
 HERMES_PROFILE=myprofile ./scripts/install.sh
 ```
 
-## Configure credentials
+### Search plus extraction credentials
 
-Add your Brave Search key to the Hermes environment:
+This plugin provides Brave Search Pro for discovery. Brave is search-only in Hermes, so the recommended default pairing is:
+
+- `BRAVE_SEARCH_API_KEY` for Brave-backed `web_search` and `brave_search`.
+- `TAVILY_API_KEY` for Tavily-backed `web_extract`.
+
+Get keys here:
+
+- Brave Search API: <https://brave.com/search/api/>
+- Tavily free API key: <https://app.tavily.com/>
+
+Tavily's free plan currently includes 1,000 API credits per month and does not require a credit card.
+
+Add the keys to the Hermes environment:
 
 ```bash
 export BRAVE_SEARCH_API_KEY=bsa-your-key-here
+export TAVILY_API_KEY=tvly-your-key-here
+```
+
+For gateways or services, make sure those variables are available to the running Hermes process. A common local setup is `~/.hermes/.env`:
+
+```bash
+BRAVE_SEARCH_API_KEY=bsa-your-key-here
+TAVILY_API_KEY=tvly-your-key-here
 ```
 
 `BRAVE_API_KEY` is also accepted for compatibility, but `BRAVE_SEARCH_API_KEY` is the documented name.
 
 ## Use Brave for search and Tavily for extract
+
+The easiest path is the interactive Hermes tools flow:
+
+```bash
+hermes tools
+```
+
+Then choose:
+
+1. **Reconfigure an existing tool's provider or API key**
+2. **Web Search & Scraping**
+3. **Brave Search Pro [pro]** for search
+4. **Tavily [paid]** for extraction
+
+Equivalent manual config:
 
 ```yaml
 plugins:
