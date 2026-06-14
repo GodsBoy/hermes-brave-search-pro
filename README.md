@@ -190,6 +190,12 @@ Canonical Hermes install:
 hermes plugins install GodsBoy/hermes-brave-search-pro --enable
 ```
 
+Update an existing install:
+
+```bash
+hermes plugins update brave-search
+```
+
 Direct user-plugin install:
 
 ```bash
