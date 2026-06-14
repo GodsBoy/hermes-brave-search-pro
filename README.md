@@ -252,7 +252,7 @@ python ~/.hermes/plugins/brave-search/scripts/doctor.py
 
 It checks:
 
-- `BRAVE_SEARCH_API_KEY`
+- `BRAVE_SEARCH_API_KEY` or compatibility fallback `BRAVE_API_KEY`
 - `TAVILY_API_KEY`
 - `web.backend`
 - `web.search_backend`

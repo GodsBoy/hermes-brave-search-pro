@@ -27,7 +27,7 @@ def test_doctor_checks_keys_and_web_config(monkeypatch):
     checks = run_checks()
 
     assert [check.name for check in checks] == [
-        "BRAVE_SEARCH_API_KEY",
+        "BRAVE_SEARCH_API_KEY or BRAVE_API_KEY",
         "TAVILY_API_KEY",
         "web.backend",
         "web.search_backend",

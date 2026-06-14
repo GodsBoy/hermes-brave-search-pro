@@ -12,7 +12,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Any
 
-from .constants import BRAVE_API_KEY_ENV
+from .constants import BRAVE_API_KEY_COMPAT_ENV, BRAVE_API_KEY_ENV
 
 BRAVE_PRO_BACKEND = "brave-pro"
 BRAVE_FREE_BACKEND = "brave-free"
@@ -126,6 +126,12 @@ def _get_env_value(name: str) -> str | None:
     return os.environ.get(name)
 
 
+def _has_brave_api_key() -> bool:
+    return bool(
+        _get_env_value(BRAVE_API_KEY_ENV) or _get_env_value(BRAVE_API_KEY_COMPAT_ENV)
+    )
+
+
 def ensure_recommended_web_config(*, force: bool = False) -> list[str]:
     """Persist safe Brave Pro web defaults when the plugin is installed.
 
@@ -134,7 +140,7 @@ def ensure_recommended_web_config(*, force: bool = False) -> list[str]:
     non-Brave provider.
     """
 
-    if not _get_env_value(BRAVE_API_KEY_ENV):
+    if not _has_brave_api_key():
         return []
 
     try:

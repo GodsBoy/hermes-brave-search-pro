@@ -10,10 +10,11 @@ from .compat import (
     TAVILY_API_KEY_ENV,
     TAVILY_BACKEND,
     _get_env_value,
+    _has_brave_api_key,
     apply_runtime_compat,
     ensure_recommended_web_config,
 )
-from .constants import BRAVE_API_KEY_ENV
+from .constants import BRAVE_API_KEY_COMPAT_ENV, BRAVE_API_KEY_ENV
 
 
 @dataclass
@@ -40,7 +41,7 @@ def _load_web_config() -> dict:
 
 def run_checks() -> list[Check]:
     web = _load_web_config()
-    brave_key = bool(_get_env_value(BRAVE_API_KEY_ENV))
+    brave_key = _has_brave_api_key()
     tavily_key = bool(_get_env_value(TAVILY_API_KEY_ENV))
     backend = web.get("backend")
     search_backend = web.get("search_backend")
@@ -48,7 +49,7 @@ def run_checks() -> list[Check]:
 
     return [
         Check(
-            BRAVE_API_KEY_ENV,
+            f"{BRAVE_API_KEY_ENV} or {BRAVE_API_KEY_COMPAT_ENV}",
             brave_key,
             "present" if brave_key else "missing. Get one from https://brave.com/search/api/",
         ),
