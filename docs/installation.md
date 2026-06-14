@@ -74,24 +74,27 @@ TAVILY_API_KEY=tvly-your-key-here
 
 ## Use Brave for search and Tavily for extract
 
-The plugin applies safe defaults when Hermes loads it. If Brave is credentialed, missing or still-free web search settings are moved to Brave Pro; if Tavily is credentialed and no extraction provider is selected, extraction is set to Tavily. You can also run the helper explicitly:
+The plugin applies safe defaults when Hermes loads it. If Brave is credentialed, missing or still-free web search settings are moved to Brave Pro. If Tavily is credentialed and no extraction provider is selected, extraction is set to Tavily.
+
+Run the doctor explicitly to check both sides:
 
 ```bash
-python ~/.hermes/plugins/brave-search/scripts/configure.py
+python ~/.hermes/plugins/brave-search/scripts/doctor.py
 ```
 
-The interactive Hermes tools flow remains available:
+After adding missing keys, apply safe provider defaults:
+
+```bash
+python ~/.hermes/plugins/brave-search/scripts/doctor.py --fix
+```
+
+The interactive Hermes tools flow remains available for visual confirmation:
 
 ```bash
 hermes tools
 ```
 
-Then choose:
-
-1. **Reconfigure an existing tool's provider or API key**
-2. **Web Search & Scraping**
-3. **Brave Search Pro [pro]** for search
-4. **Tavily [paid]** for extraction
+Then choose **Reconfigure an existing tool's provider or API key**, then **Web Search & Scraping**. **Brave Search Pro [pro]** should show as the active search provider. Tavily is the recommended extraction backend, but it needs `TAVILY_API_KEY` before `web_extract` can use it.
 
 Equivalent manual config:
 

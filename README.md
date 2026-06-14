@@ -60,24 +60,30 @@ export TAVILY_API_KEY=tvly-your-key-here
 
 Brave Search Pro is search-only by design, so Tavily remains the recommended `web_extract` pairing. Tavily's free plan currently includes 1,000 API credits per month and does not require a credit card.
 
-The plugin applies safe defaults when Hermes loads it. To verify or force the configuration immediately, run:
+The plugin applies safe defaults when Hermes loads it:
+
+- Brave Pro is preferred for `web_search` when Brave is credentialed.
+- Tavily is used for `web_extract` when a Tavily key is present and no extraction provider is already selected.
+
+Check the whole setup with the doctor command:
 
 ```bash
-python ~/.hermes/plugins/brave-search/scripts/configure.py
+python ~/.hermes/plugins/brave-search/scripts/doctor.py
 ```
 
-Then confirm the provider selection if you want to inspect it visually:
+If the doctor reports missing Tavily credentials, get a free key from [app.tavily.com](https://app.tavily.com/) and add `TAVILY_API_KEY` to the environment Hermes runs with. Then run:
+
+```bash
+python ~/.hermes/plugins/brave-search/scripts/doctor.py --fix
+```
+
+You can still inspect the provider selection visually:
 
 ```bash
 hermes tools
 ```
 
-In the interactive menu:
-
-1. Choose **Reconfigure an existing tool's provider or API key**.
-2. Choose **Web Search & Scraping**.
-3. Choose **Brave Search Pro [pro]**.
-4. Keep or select **Tavily [paid]** for extraction when Hermes asks for the extraction provider.
+In the interactive menu, choose **Reconfigure an existing tool's provider or API key**, then **Web Search & Scraping**. The search provider should show **Brave Search Pro [pro]** as active. Tavily is an extraction backend, so make sure `TAVILY_API_KEY` is present before expecting Tavily-backed `web_extract` to work.
 
 <p align="center">
   <img src="docs/assets/hermes-tools-reconfigure-provider.jpg" alt="Hermes tools menu with Reconfigure an existing tool's provider or API key selected" width="760">
@@ -177,6 +183,7 @@ src/hermes_brave_search/
 ├── client.py       # Brave API client and normalisation
 ├── compat.py       # Runtime compatibility and safe config defaults
 ├── configure.py    # Explicit configuration helper
+├── doctor.py       # Setup diagnostics for Brave and Tavily
 ├── provider.py     # Hermes web search provider
 ├── schemas.py      # Tool schema for brave_search
 └── tools.py        # Tool handler
@@ -234,6 +241,35 @@ uv run ruff check .
 The default tests mock Brave HTTP responses. Live API calls are not part of the normal test path, so public contributors do not need Brave API quota.
 
 ## Troubleshooting
+
+### Run the doctor
+
+Use the doctor command when setup does not look right:
+
+```bash
+python ~/.hermes/plugins/brave-search/scripts/doctor.py
+```
+
+It checks:
+
+- `BRAVE_SEARCH_API_KEY`
+- `TAVILY_API_KEY`
+- `web.backend`
+- `web.search_backend`
+- `web.extract_backend`
+- the runtime compatibility shim that keeps Brave Pro selected when Brave Free shares the same API key
+
+After adding missing keys, ask the doctor to apply safe provider defaults:
+
+```bash
+python ~/.hermes/plugins/brave-search/scripts/doctor.py --fix
+```
+
+Use `--force` with care if you intentionally want to overwrite existing web-provider choices:
+
+```bash
+python ~/.hermes/plugins/brave-search/scripts/doctor.py --fix --force
+```
 
 ### Hermes cannot see the provider
 

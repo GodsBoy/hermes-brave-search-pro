@@ -27,16 +27,16 @@ The plugin also applies a Brave Pro compatibility shim when Hermes loads it:
 - `web.extract_backend` is set to `tavily` when Tavily is credentialed and no extraction provider is selected.
 - Older Hermes provider pickers are patched in-process so **Brave Search Pro [pro]** opens selected instead of **Brave Search (Free)** when both share the same Brave API key.
 
-You can run the same configuration helper manually:
+Run the doctor to check the full Brave plus Tavily setup:
 
 ```bash
-python ~/.hermes/plugins/brave-search/scripts/configure.py
+python ~/.hermes/plugins/brave-search/scripts/doctor.py
 ```
 
-To force the recommended provider settings:
+After adding missing keys, ask the doctor to apply safe provider defaults:
 
 ```bash
-python ~/.hermes/plugins/brave-search/scripts/configure.py --force
+python ~/.hermes/plugins/brave-search/scripts/doctor.py --fix
 ```
 
 Manual equivalent:
@@ -53,12 +53,7 @@ You can also confirm or change this interactively:
 hermes tools
 ```
 
-In the menu:
-
-1. Choose **Reconfigure an existing tool's provider or API key**.
-2. Choose **Web Search & Scraping**.
-3. Select **Brave Search Pro [pro]** as the search provider.
-4. Keep or select **Tavily [paid]** as the extraction provider.
+In the menu, choose **Reconfigure an existing tool's provider or API key**, then **Web Search & Scraping**. **Brave Search Pro [pro]** should show as the active search provider. Tavily is the recommended extraction backend, but it needs `TAVILY_API_KEY` first.
 
 Restart the gateway after changing plugin or web-provider configuration:
 
