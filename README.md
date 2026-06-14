@@ -46,28 +46,31 @@ Canonical Hermes install:
 hermes plugins install GodsBoy/hermes-brave-search-pro --enable
 ```
 
-Export your Brave credential in the environment Hermes runs with:
+During install, Hermes prompts for the plugin's recommended credentials:
+
+- `BRAVE_SEARCH_API_KEY` for Brave-backed search
+- `TAVILY_API_KEY` for Tavily-backed extraction
+
+If you skipped either prompt, add the values to the environment Hermes runs with:
 
 ```bash
 export BRAVE_SEARCH_API_KEY=bsa-your-key-here
-```
-
-Brave Search Pro is search-only by design, so pair it with Tavily for `web_extract`. If you have never set up Tavily, get a free API key at [app.tavily.com](https://app.tavily.com/) and export it too:
-
-```bash
 export TAVILY_API_KEY=tvly-your-key-here
 ```
 
-Tavily's free plan currently includes 1,000 API credits per month and does not require a credit card.
+Brave Search Pro is search-only by design, so Tavily remains the recommended `web_extract` pairing. Tavily's free plan currently includes 1,000 API credits per month and does not require a credit card.
 
-Then select Brave Search Pro as the Web Search provider:
+The plugin applies safe defaults when Hermes loads it. To verify or force the configuration immediately, run:
 
 ```bash
 python ~/.hermes/plugins/brave-search/scripts/configure.py
-hermes tools
 ```
 
-The plugin applies the same safe defaults when Hermes loads it, but the helper gives you an explicit confirmation path.
+Then confirm the provider selection if you want to inspect it visually:
+
+```bash
+hermes tools
+```
 
 In the interactive menu:
 
@@ -172,6 +175,8 @@ The standard Hermes `web_search` tool stays standard. The plugin changes the bac
 src/hermes_brave_search/
 ├── __init__.py     # Hermes registration entry point
 ├── client.py       # Brave API client and normalisation
+├── compat.py       # Runtime compatibility and safe config defaults
+├── configure.py    # Explicit configuration helper
 ├── provider.py     # Hermes web search provider
 ├── schemas.py      # Tool schema for brave_search
 └── tools.py        # Tool handler
@@ -236,6 +241,7 @@ Then confirm your config uses the provider name exactly:
 
 ```yaml
 web:
+  backend: "brave-pro"
   search_backend: "brave-pro"
 ```
 
