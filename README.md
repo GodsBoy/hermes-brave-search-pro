@@ -51,7 +51,38 @@ Export your Brave credential in the environment Hermes runs with:
 export BRAVE_SEARCH_API_KEY=bsa-your-key-here
 ```
 
-Configure Hermes to use Brave for search and Tavily for extraction:
+Then select Brave Search Pro as the Web Search provider:
+
+```bash
+hermes tools
+```
+
+In the interactive menu:
+
+1. Choose **Reconfigure an existing tool's provider or API key**.
+2. Choose **Web Search & Scraping**.
+3. Choose **Brave Search Pro [pro]**.
+4. Keep or select Tavily for extraction if Hermes asks for an extraction provider.
+
+<p align="center">
+  <img src="docs/assets/hermes-tools-reconfigure-provider.jpg" alt="Hermes tools menu with Reconfigure an existing tool's provider or API key selected" width="760">
+</p>
+
+<p align="center">
+  <img src="docs/assets/hermes-tools-web-search-scraping.jpg" alt="Hermes tools menu with Web Search and Scraping selected" width="760">
+</p>
+
+<p align="center">
+  <img src="docs/assets/hermes-tools-brave-pro-provider.jpg" alt="Hermes provider menu showing Brave Search Pro as an active provider option" width="920">
+</p>
+
+The provider should appear as:
+
+```text
+Brave Search Pro [pro] - Brave-backed discovery for Hermes web_search. Pair with Tavily for web_extract.
+```
+
+Equivalent manual configuration:
 
 ```yaml
 plugins:
