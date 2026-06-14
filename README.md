@@ -102,6 +102,13 @@ web:
   extract_backend: "tavily"
 ```
 
+Or set those keys directly:
+
+```bash
+hermes config set web.search_backend brave-pro
+hermes config set web.extract_backend tavily
+```
+
 That gives you the clean pairing:
 
 ```python

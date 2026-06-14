@@ -99,6 +99,13 @@ web:
   extract_backend: "tavily"
 ```
 
+Or set those keys directly:
+
+```bash
+hermes config set web.search_backend brave-pro
+hermes config set web.extract_backend tavily
+```
+
 With this setup:
 
 - `web_search` uses Brave Search Pro.
