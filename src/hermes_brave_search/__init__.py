@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from .compat import apply_runtime_compat
 from .provider import BraveProSearchProvider
 from .schemas import BRAVE_SEARCH_SCHEMA
 from .tools import brave_search_tool
@@ -11,6 +12,8 @@ __all__ = ["BraveProSearchProvider", "register"]
 
 def register(ctx) -> None:
     """Register the Brave provider and the advanced Brave tool with Hermes."""
+
+    apply_runtime_compat()
 
     provider = BraveProSearchProvider()
     ctx.register_web_search_provider(provider)

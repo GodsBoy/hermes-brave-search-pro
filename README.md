@@ -26,11 +26,12 @@ Hermes already separates search from extraction. This plugin leans into that des
 - **Discovery:** `web_search` uses Brave Search Pro through the `brave-pro` backend.
 - **Extraction:** `web_extract` can stay on Tavily through `web.extract_backend`.
 - **Advanced search:** `brave_search` exposes Brave modes that do not fit the standard `web_search` contract.
-- **No core patching:** install the plugin, configure Hermes, and keep updating Hermes normally.
+- **No source patching:** install the plugin, let its compatibility shim configure safe defaults, and keep updating Hermes normally.
 
 ## Features
 
 - Hermes web-search provider named `brave-pro`
+- Runtime compatibility shim that safely prefers Brave Pro over Brave Free when both share the same Brave API key
 - Advanced Hermes tool named `brave_search`
 - Search-only provider so Tavily remains the extraction backend
 - Shared Brave client with structured errors and response normalisation
@@ -62,8 +63,11 @@ Tavily's free plan currently includes 1,000 API credits per month and does not r
 Then select Brave Search Pro as the Web Search provider:
 
 ```bash
+python ~/.hermes/plugins/brave-search/scripts/configure.py
 hermes tools
 ```
+
+The plugin applies the same safe defaults when Hermes loads it, but the helper gives you an explicit confirmation path.
 
 In the interactive menu:
 
@@ -98,6 +102,7 @@ plugins:
     - brave-search
 
 web:
+  backend: "brave-pro"
   search_backend: "brave-pro"
   extract_backend: "tavily"
 ```
@@ -105,6 +110,7 @@ web:
 Or set those keys directly:
 
 ```bash
+hermes config set web.backend brave-pro
 hermes config set web.search_backend brave-pro
 hermes config set web.extract_backend tavily
 ```
@@ -243,6 +249,7 @@ Set extraction explicitly:
 
 ```yaml
 web:
+  backend: "brave-pro"
   search_backend: "brave-pro"
   extract_backend: "tavily"
 ```

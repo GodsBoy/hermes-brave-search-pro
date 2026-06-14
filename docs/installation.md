@@ -74,7 +74,13 @@ TAVILY_API_KEY=tvly-your-key-here
 
 ## Use Brave for search and Tavily for extract
 
-The easiest path is the interactive Hermes tools flow:
+The plugin applies safe defaults when Hermes loads it. If Brave is credentialed, missing or still-free web search settings are moved to Brave Pro; if Tavily is credentialed and no extraction provider is selected, extraction is set to Tavily. You can also run the helper explicitly:
+
+```bash
+python ~/.hermes/plugins/brave-search/scripts/configure.py
+```
+
+The interactive Hermes tools flow remains available:
 
 ```bash
 hermes tools
@@ -95,6 +101,7 @@ plugins:
     - brave-search
 
 web:
+  backend: "brave-pro"
   search_backend: "brave-pro"
   extract_backend: "tavily"
 ```
@@ -102,6 +109,7 @@ web:
 Or set those keys directly:
 
 ```bash
+hermes config set web.backend brave-pro
 hermes config set web.search_backend brave-pro
 hermes config set web.extract_backend tavily
 ```

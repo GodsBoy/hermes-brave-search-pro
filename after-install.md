@@ -21,9 +21,28 @@ BRAVE_SEARCH_API_KEY=bsa-your-key-here
 TAVILY_API_KEY=tvly-your-key-here
 ```
 
-Persist the recommended web providers:
+The plugin also applies a Brave Pro compatibility shim when Hermes loads it:
+
+- `web.backend` and `web.search_backend` are set to `brave-pro` when they are missing or still set to `brave-free`.
+- `web.extract_backend` is set to `tavily` when Tavily is credentialed and no extraction provider is selected.
+- Older Hermes provider pickers are patched in-process so **Brave Search Pro [pro]** opens selected instead of **Brave Search (Free)** when both share the same Brave API key.
+
+You can run the same configuration helper manually:
 
 ```bash
+python ~/.hermes/plugins/brave-search/scripts/configure.py
+```
+
+To force the recommended provider settings:
+
+```bash
+python ~/.hermes/plugins/brave-search/scripts/configure.py --force
+```
+
+Manual equivalent:
+
+```bash
+hermes config set web.backend brave-pro
 hermes config set web.search_backend brave-pro
 hermes config set web.extract_backend tavily
 ```
