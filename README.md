@@ -17,7 +17,7 @@
 
 Brave Search Pro as a first-class Hermes Agent plugin.
 
-Use Brave for fast index-backed discovery, keep Tavily doing extraction, and reach for the explicit `brave_search` tool when you need Brave-specific modes like images, news, videos, discussions, suggestions, raw payloads, or web results plus Brave's answer-context payloads.
+Use Brave for fast index-backed discovery and query-to-context grounding, keep Tavily doing URL extraction, and reach for the explicit `brave_search` tool when you need Brave-specific modes like images, news, videos, discussions, suggestions, raw payloads, or Brave LLM Context API chunks.
 
 ## Why this exists
 
@@ -25,6 +25,7 @@ Hermes already separates search from extraction. This plugin leans into that des
 
 - **Discovery:** `web_search` uses Brave Search Pro through the `brave-pro` backend.
 - **Extraction:** `web_extract` can stay on Tavily through `web.extract_backend`.
+- **Query context:** `brave_search(mode="llm")` and `brave_search(mode="context")` call Brave's dedicated `/res/v1/llm/context` endpoint.
 - **Advanced search:** `brave_search` exposes Brave modes that do not fit the standard `web_search` contract.
 - **No source patching:** install the plugin, let its compatibility shim configure safe defaults, and keep updating Hermes normally.
 
@@ -33,6 +34,7 @@ Hermes already separates search from extraction. This plugin leans into that des
 - Hermes web-search provider named `brave-pro`
 - Runtime compatibility shim that safely prefers Brave Pro over Brave Free when both share the same Brave API key
 - Advanced Hermes tool named `brave_search`
+- Dedicated Brave LLM Context API support for query-to-context chunks
 - Search-only provider so Tavily remains the extraction backend
 - Shared Brave client with structured errors and response normalisation
 - Mocked test suite that does not require live Brave credentials
@@ -130,6 +132,7 @@ That gives you the clean pairing:
 web_search(query="Hermes Agent plugins", limit=5)   # Brave Search Pro
 web_extract(urls=["https://example.com/article"])  # Tavily
 brave_search(query="Hermes Agent", mode="news")   # Brave-specific mode
+brave_search(query="Hermes Agent", mode="context")  # Brave LLM Context API
 ```
 
 Restart the gateway after installing or changing plugin configuration:
@@ -142,9 +145,10 @@ hermes gateway restart
 
 `brave_search` accepts:
 
-- `both`: web results plus Brave answer-context payloads where available
+- `both`: Brave web results plus dedicated LLM Context API chunks
 - `web`: standard Brave web results
-- `llm`: Brave answer-context payloads where available
+- `llm`: Brave LLM Context API chunks from `/res/v1/llm/context`
+- `context`: alias for `llm`, useful when you want the dedicated context endpoint explicitly
 - `images`: image search
 - `news`: news search
 - `videos`: video search
@@ -156,7 +160,16 @@ Example:
 
 ```python
 brave_search(query="Hermes Agent plugin system", mode="both", limit=5)
+brave_search(
+    query="Hermes Agent plugin system",
+    mode="context",
+    limit=5,
+    max_tokens=8192,
+    context_threshold_mode="balanced",
+)
 ```
+
+`mode="both"` now makes two Brave calls: normal web search for links, then the dedicated LLM Context endpoint for extracted chunks. If the context call fails, the tool still returns web results and includes `llm_context_error` so the failure is visible. `mode="llm"` and `mode="context"` call only the dedicated context endpoint.
 
 ## Architecture
 
@@ -169,6 +182,7 @@ flowchart TB
   Advanced --> Client[Shared Brave client]
   Brave --> Client
   Client --> API[Brave Search Pro API]
+  Client --> Context[Brave LLM Context API]
   Agent --> Extract[web_extract]
   Extract --> Tavily[Tavily backend]
 ```

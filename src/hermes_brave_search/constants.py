@@ -6,6 +6,7 @@ BRAVE_SEARCH_MODES = [
     "both",
     "web",
     "llm",
+    "context",
     "images",
     "news",
     "videos",
@@ -15,6 +16,7 @@ BRAVE_SEARCH_MODES = [
 ]
 
 BRAVE_SEARCH_ENDPOINT = "https://api.search.brave.com/res/v1/web/search"
+BRAVE_LLM_CONTEXT_ENDPOINT = "https://api.search.brave.com/res/v1/llm/context"
 BRAVE_NEWS_ENDPOINT = "https://api.search.brave.com/res/v1/news/search"
 BRAVE_IMAGES_ENDPOINT = "https://api.search.brave.com/res/v1/images/search"
 BRAVE_VIDEOS_ENDPOINT = "https://api.search.brave.com/res/v1/videos/search"
@@ -23,7 +25,8 @@ BRAVE_SUGGEST_ENDPOINT = "https://api.search.brave.com/res/v1/suggest/search"
 BRAVE_MODE_ENDPOINTS = {
     "web": BRAVE_SEARCH_ENDPOINT,
     "both": BRAVE_SEARCH_ENDPOINT,
-    "llm": BRAVE_SEARCH_ENDPOINT,
+    "llm": BRAVE_LLM_CONTEXT_ENDPOINT,
+    "context": BRAVE_LLM_CONTEXT_ENDPOINT,
     "discussions": BRAVE_SEARCH_ENDPOINT,
     "raw": BRAVE_SEARCH_ENDPOINT,
     "news": BRAVE_NEWS_ENDPOINT,

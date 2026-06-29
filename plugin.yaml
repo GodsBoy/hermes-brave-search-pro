@@ -1,5 +1,5 @@
 name: brave-search
-version: 0.1.3
+version: 0.1.4
 description: Brave Search Pro provider and advanced Brave search tool for Hermes Agent
 kind: backend
 provides_tools:

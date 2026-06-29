@@ -121,7 +121,7 @@ With this setup:
 
 - `web_search` uses Brave Search Pro.
 - `web_extract` keeps using Tavily.
-- `brave_search` remains available for richer Brave modes.
+- `brave_search` remains available for richer Brave modes, including Brave's dedicated LLM Context API through `mode="llm"` or `mode="context"`.
 
 Restart the gateway after installing or changing plugin configuration:
 
@@ -133,9 +133,10 @@ hermes gateway restart
 
 The explicit `brave_search` tool supports:
 
-- `both`: web results plus Brave answer-context results where available
+- `both`: Brave web results plus dedicated LLM Context API chunks
 - `web`: standard Brave web results
-- `llm`: Brave answer-context results where available
+- `llm`: Brave LLM Context API chunks from `/res/v1/llm/context`
+- `context`: alias for `llm`, useful when you want the dedicated context endpoint explicitly
 - `images`: Brave image search
 - `news`: Brave news search
 - `videos`: Brave video search

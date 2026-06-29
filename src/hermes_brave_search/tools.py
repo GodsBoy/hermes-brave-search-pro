@@ -23,5 +23,12 @@ def brave_search_tool(params: dict[str, Any], **kwargs: Any) -> str:
 
     from .client import BraveSearchClient
 
-    result = BraveSearchClient().search(query=query, mode=mode, limit=limit)
+    result = BraveSearchClient().search(
+        query=query,
+        mode=mode,
+        limit=limit,
+        max_tokens=params.get("max_tokens"),
+        max_urls=params.get("max_urls"),
+        context_threshold_mode=params.get("context_threshold_mode"),
+    )
     return json.dumps(result, ensure_ascii=False)

@@ -2,6 +2,8 @@
 
 This plugin works best with Brave for search and Tavily for extraction.
 
+The `brave_search` tool also supports Brave's dedicated LLM Context API. Use `mode="llm"` or `mode="context"` for query-to-context chunks, and `mode="both"` for Brave web results plus those context chunks.
+
 If you skipped a key during install, get keys here:
 
 - Brave Search API: <https://brave.com/search/api/>
