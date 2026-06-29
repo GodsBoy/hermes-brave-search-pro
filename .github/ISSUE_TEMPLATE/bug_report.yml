@@ -1,0 +1,111 @@
+name: Bug or regression report
+description: Report broken, incorrect, or regressed behavior in the Brave Search Pro plugin.
+title: "fix: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug. Please include enough evidence for a maintainer to reproduce or verify it. Redact any Brave API key or other secret before posting.
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Affected surface
+      description: Which part of the plugin is misbehaving?
+      options:
+        - web_search via the brave-pro provider
+        - brave_search advanced tool
+        - A specific brave_search mode (web, news, images, videos, discussions, suggest, llm, both, raw)
+        - Plugin install, enable, or discovery
+        - Configuration (search_backend / extract_backend)
+        - Something else
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should have happened?
+      placeholder: web_search should return Brave Search Pro results when search_backend is brave-pro.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happened instead?
+      placeholder: web_search returned an empty result set even though the Brave API key is valid.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: List exact steps, commands, config, or a small scenario that reproduces the issue.
+      placeholder: |
+        1. Enable the brave-search plugin
+        2. Set web.search_backend to brave-pro
+        3. Restart the Hermes gateway
+        4. Call web_search(query="...", limit=5)
+        5. Observe ...
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Plugin version and branch
+      description: hermes-brave-search version, branch, commit, or release tag.
+      placeholder: 0.1.0, main, or commit SHA
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Python version, and Hermes Agent version.
+      placeholder: Ubuntu 24.04, Python 3.12, Hermes Agent ...
+    validations:
+      required: false
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Relevant config
+      description: Include only the relevant plugin or Hermes config. Redact secrets, including the Brave API key.
+      render: yaml
+      placeholder: |
+        plugins:
+          enabled:
+            - brave-search
+        web:
+          search_backend: "brave-pro"
+          extract_backend: "tavily"
+    validations:
+      required: false
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Logs, traceback, or failing test
+      description: Paste the error, traceback, failing assertion, or command output that proves the issue. Do not paste your API key.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation attempted
+      description: What did you run or check already?
+      placeholder: |
+        - uv run pytest -> passes
+        - uv run ruff check . -> passes
+        - Confirmed BRAVE_SEARCH_API_KEY is exported in the Hermes process
+    validations:
+      required: false

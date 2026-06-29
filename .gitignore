@@ -1,3 +1,4 @@
+# Python build / cache artefacts
 __pycache__/
 *.py[cod]
 *.egg-info/
@@ -10,4 +11,26 @@ build/
 .venv/
 .env
 .DS_Store
+
+# Local agent context and tooling (never publish to this repo)
+# Private instruction / config files for coding agents
+CLAUDE.md
+CLAUDE.local.md
+GEMINI.md
+AGENTS.md
+.claude/
+.cursor/
+.aider*
+.windsurf/
+
+# Compound Engineering artefacts and agent working docs
+compound-engineering/
+.compound-engineering/
 docs/plans/
+docs/solutions/
+docs/brainstorms/
+tasks/
+PROGRESS.md
+TASK.md
+BRIEF.md
+lessons.md

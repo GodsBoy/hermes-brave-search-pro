@@ -37,6 +37,7 @@ def test_doctor_checks_keys_and_web_config(monkeypatch):
 
 
 def test_doctor_reports_missing_tavily(monkeypatch, capsys):
+    monkeypatch.delenv("TAVILY_API_KEY", raising=False)
     config = {"web": {"backend": "brave-pro", "search_backend": "brave-pro"}}
 
     config_mod = types.ModuleType("hermes_cli.config")

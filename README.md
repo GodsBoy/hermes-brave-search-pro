@@ -17,7 +17,7 @@
 
 Brave Search Pro as a first-class Hermes Agent plugin.
 
-Use Brave for fast index-backed discovery and query-to-context grounding, keep Tavily doing URL extraction, and reach for the explicit `brave_search` tool when you need Brave-specific modes like images, news, videos, discussions, suggestions, raw payloads, or Brave LLM Context API chunks.
+Brave handles fast, index-backed discovery for `web_search`, Tavily keeps doing URL extraction, and the explicit `brave_search` tool adds Brave-specific modes plus dedicated Brave LLM Context API chunks when you want them.
 
 ## Why this exists
 
@@ -53,33 +53,41 @@ During install, Hermes prompts for the plugin's recommended credentials:
 - `BRAVE_SEARCH_API_KEY` for Brave-backed search
 - `TAVILY_API_KEY` for Tavily-backed extraction
 
-If you skipped either prompt, add the values to the environment Hermes runs with:
+If you skipped either prompt, export them in the environment Hermes runs with:
 
 ```bash
 export BRAVE_SEARCH_API_KEY=bsa-your-key-here
 export TAVILY_API_KEY=tvly-your-key-here
 ```
 
-Brave Search Pro is search-only by design, so Tavily remains the recommended `web_extract` pairing. Tavily's free plan currently includes 1,000 API credits per month and does not require a credit card.
+Brave Search Pro is search-only by design, so Tavily stays the recommended `web_extract` pairing (it has a free tier, see [app.tavily.com](https://app.tavily.com/)). When Hermes loads the plugin it applies safe defaults: Brave Pro for `web_search` when Brave is credentialed, and Tavily for `web_extract` when a Tavily key is present and no extraction provider is already selected.
 
-The plugin applies safe defaults when Hermes loads it:
-
-- Brave Pro is preferred for `web_search` when Brave is credentialed.
-- Tavily is used for `web_extract` when a Tavily key is present and no extraction provider is already selected.
-
-Check the whole setup with the doctor command:
+Verify the setup with the doctor:
 
 ```bash
 python ~/.hermes/plugins/brave-search/scripts/doctor.py
 ```
 
-If the doctor reports missing Tavily credentials, get a free key from [app.tavily.com](https://app.tavily.com/) and add `TAVILY_API_KEY` to the environment Hermes runs with. Then run:
+It reports what is configured and applies safe defaults with `--fix`. See [Run the doctor](#run-the-doctor) under Troubleshooting for the full check list.
 
-```bash
-python ~/.hermes/plugins/brave-search/scripts/doctor.py --fix
+Then use the clean pairing:
+
+```python
+web_search(query="Hermes Agent plugins", limit=5)   # Brave Search Pro
+web_extract(urls=["https://example.com/article"])  # Tavily
+brave_search(query="Hermes Agent", mode="news")   # Brave-specific mode
+brave_search(query="Hermes Agent", mode="context")  # Brave LLM Context API
 ```
 
-You can still inspect the provider selection visually:
+Restart the gateway after installing or changing plugin configuration:
+
+```bash
+hermes gateway restart
+```
+
+## Verify the provider
+
+To confirm the active provider visually:
 
 ```bash
 hermes tools
@@ -105,7 +113,9 @@ The provider should appear as:
 Brave Search Pro [pro] - Brave-backed discovery for Hermes web_search. Pair with Tavily for web_extract.
 ```
 
-Equivalent manual configuration:
+## Manual configuration
+
+The plugin sets safe defaults automatically, but you can configure the pairing explicitly. In your `hermes` config:
 
 ```yaml
 plugins:
@@ -133,12 +143,6 @@ web_search(query="Hermes Agent plugins", limit=5)   # Brave Search Pro
 web_extract(urls=["https://example.com/article"])  # Tavily
 brave_search(query="Hermes Agent", mode="news")   # Brave-specific mode
 brave_search(query="Hermes Agent", mode="context")  # Brave LLM Context API
-```
-
-Restart the gateway after installing or changing plugin configuration:
-
-```bash
-hermes gateway restart
 ```
 
 ## Advanced `brave_search` modes
