@@ -17,14 +17,14 @@
 
 Brave Search Pro as a first-class Hermes Agent plugin.
 
-Brave handles fast, index-backed discovery for `web_search`, Tavily keeps doing URL extraction, and the explicit `brave_search` tool adds Brave-specific modes plus dedicated Brave LLM Context API chunks with source, freshness, locale, and token-budget controls when you want them.
+Brave handles fast, index-backed discovery for `web_search`, and the explicit `brave_search` tool adds Brave-specific modes plus dedicated Brave LLM Context API chunks with source, freshness, locale, and token-budget controls when you want them. Tavily-backed `web_extract` remains a separate optional Hermes plugin pairing.
 
 ## Why this exists
 
 Hermes already separates search from extraction. This plugin leans into that design:
 
 - **Discovery:** `web_search` uses Brave Search Pro through the `brave-pro` backend.
-- **Extraction:** `web_extract` can stay on Tavily through `web.extract_backend`.
+- **Extraction:** `web_extract` can stay on Tavily when Hermes' bundled `web-tavily` plugin is enabled and `web.extract_backend` is set to `tavily`.
 - **Query context:** `brave_search(mode="llm")` and `brave_search(mode="context")` call Brave's dedicated `/res/v1/llm/context` endpoint.
 - **Advanced search:** `brave_search` exposes Brave modes that do not fit the standard `web_search` contract.
 - **No source patching:** install the plugin, let its compatibility shim configure safe defaults, and keep updating Hermes normally.
@@ -37,7 +37,7 @@ Hermes already separates search from extraction. This plugin leans into that des
 - Dedicated Brave LLM Context API support for query-to-context chunks
 - Context controls for freshness, country, language, Goggles, local recall, source metadata, snippets, and token budgets
 - Bounded retry handling for transient Brave API failures
-- Search-only provider so Tavily remains the extraction backend
+- Search-only provider so extraction stays on a dedicated backend such as Hermes' bundled `web-tavily`
 - Shared Brave client with structured errors and response normalisation
 - Mocked test suite that does not require live Brave credentials
 - Public-ready docs, examples, and visual explanation
@@ -50,19 +50,24 @@ Canonical Hermes install:
 hermes plugins install GodsBoy/hermes-brave-search-pro --enable
 ```
 
-During install, Hermes prompts for the plugin's recommended credentials:
+During install, Hermes prompts for the plugin's required credential:
 
 - `BRAVE_SEARCH_API_KEY` for Brave-backed search
-- `TAVILY_API_KEY` for Tavily-backed extraction
 
-If you skipped either prompt, export them in the environment Hermes runs with:
+If you skipped the prompt, export it in the environment Hermes runs with:
 
 ```bash
 export BRAVE_SEARCH_API_KEY=bsa-your-key-here
-export TAVILY_API_KEY=tvly-your-key-here
 ```
 
-Brave Search Pro is search-only by design, so Tavily stays the recommended `web_extract` pairing (it has a free tier, see [app.tavily.com](https://app.tavily.com/)). When Hermes loads the plugin it applies safe defaults: Brave Pro for `web_search` when Brave is credentialed, and Tavily for `web_extract` when a Tavily key is present and no extraction provider is already selected.
+Brave Search Pro is search-only by design, so this plugin does not provide `web_extract`. If you want Tavily-backed extraction, enable Hermes' bundled Tavily plugin separately, add `TAVILY_API_KEY`, and point extraction at Tavily:
+
+```bash
+hermes plugins enable web-tavily
+hermes config set web.extract_backend tavily
+```
+
+Tavily has a free tier, see [app.tavily.com](https://app.tavily.com/). When Hermes loads this plugin it applies safe defaults: Brave Pro for `web_search` when Brave is credentialed, and `web.extract_backend = tavily` when a Tavily key is present and no extraction provider is already selected. The separate `web-tavily` plugin still needs to be enabled for Tavily `web_extract` to run.
 
 Verify the setup with the doctor:
 
@@ -95,7 +100,7 @@ To confirm the active provider visually:
 hermes tools
 ```
 
-In the interactive menu, choose **Reconfigure an existing tool's provider or API key**, then **Web Search & Scraping**. The search provider should show **Brave Search Pro [pro]** as active. Tavily is an extraction backend, so make sure `TAVILY_API_KEY` is present before expecting Tavily-backed `web_extract` to work.
+In the interactive menu, choose **Reconfigure an existing tool's provider or API key**, then **Web Search & Scraping**. The search provider should show **Brave Search Pro [pro]** as active. Tavily is an extraction backend, so make sure `web-tavily` is enabled and `TAVILY_API_KEY` is present before expecting Tavily-backed `web_extract` to work.
 
 <p align="center">
   <img src="docs/assets/hermes-tools-reconfigure-provider.jpg" alt="Hermes tools menu with Reconfigure an existing tool's provider or API key selected" width="760">
@@ -123,6 +128,7 @@ The plugin sets safe defaults automatically, but you can configure the pairing e
 plugins:
   enabled:
     - brave-search
+    - web-tavily  # optional, only needed for Tavily web_extract
 
 web:
   backend: "brave-pro"
@@ -135,6 +141,7 @@ Or set those keys directly:
 ```bash
 hermes config set web.backend brave-pro
 hermes config set web.search_backend brave-pro
+hermes plugins enable web-tavily  # optional, only needed for Tavily web_extract
 hermes config set web.extract_backend tavily
 ```
 
@@ -213,7 +220,7 @@ flowchart TB
   Client --> API[Brave Search Pro API]
   Client --> Context[Brave LLM Context API]
   Agent --> Extract[web_extract]
-  Extract --> Tavily[Tavily backend]
+  Extract --> Tavily[web-tavily backend]
 ```
 
 The standard Hermes `web_search` tool stays standard. The plugin changes the backend, not the tool contract. Richer Brave modes are explicit, which keeps normal search simple and makes advanced use intentional.
@@ -336,9 +343,21 @@ Export `BRAVE_SEARCH_API_KEY` in the environment used by the Hermes process. `BR
 
 ### Extraction stopped using Tavily
 
-Set extraction explicitly:
+Tavily extraction is separate from Brave Search Pro. Enable the bundled Tavily plugin and set extraction explicitly:
+
+```bash
+hermes plugins enable web-tavily
+hermes config set web.extract_backend tavily
+```
+
+Your config should then include:
 
 ```yaml
+plugins:
+  enabled:
+    - brave-search
+    - web-tavily
+
 web:
   backend: "brave-pro"
   search_backend: "brave-pro"

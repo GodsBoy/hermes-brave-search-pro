@@ -1,5 +1,5 @@
 name: brave-search
-version: 0.1.5
+version: 0.1.6
 description: Brave Search Pro provider and advanced Brave search tool for Hermes Agent
 kind: backend
 provides_tools:
@@ -10,8 +10,4 @@ requires_env:
   - name: BRAVE_SEARCH_API_KEY
     description: Brave Search API key for Brave-backed web_search and brave_search
     url: https://brave.com/search/api/
-    secret: true
-  - name: TAVILY_API_KEY
-    description: Tavily API key for the recommended web_extract pairing
-    url: https://app.tavily.com/
     secret: true

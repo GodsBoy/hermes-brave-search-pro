@@ -7,6 +7,9 @@ from hermes_brave_search.doctor import main, run_checks
 
 
 def test_doctor_checks_keys_and_web_config(monkeypatch):
+    monkeypatch.setattr(
+        "hermes_brave_search.doctor._web_tavily_enabled", lambda: True
+    )
     config = {
         "web": {
             "backend": "brave-pro",
@@ -29,6 +32,7 @@ def test_doctor_checks_keys_and_web_config(monkeypatch):
     assert [check.name for check in checks] == [
         "BRAVE_SEARCH_API_KEY or BRAVE_API_KEY",
         "TAVILY_API_KEY",
+        "web-tavily plugin",
         "web.backend",
         "web.search_backend",
         "web.extract_backend",
@@ -37,6 +41,9 @@ def test_doctor_checks_keys_and_web_config(monkeypatch):
 
 
 def test_doctor_reports_missing_tavily(monkeypatch, capsys):
+    monkeypatch.setattr(
+        "hermes_brave_search.doctor._web_tavily_enabled", lambda: False
+    )
     monkeypatch.delenv("TAVILY_API_KEY", raising=False)
     config = {"web": {"backend": "brave-pro", "search_backend": "brave-pro"}}
 
@@ -62,5 +69,7 @@ def test_doctor_reports_missing_tavily(monkeypatch, capsys):
     assert main([]) == 1
     output = capsys.readouterr().out
     assert "TAVILY_API_KEY" in output
+    assert "web-tavily plugin" in output
+    assert "hermes plugins enable web-tavily" in output
     assert "missing" in output
     assert "--fix" in output
