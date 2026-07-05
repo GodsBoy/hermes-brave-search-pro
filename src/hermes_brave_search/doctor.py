@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import json
+import subprocess
 from dataclasses import dataclass
 
 from .compat import (
@@ -39,10 +41,42 @@ def _load_web_config() -> dict:
     return web if isinstance(web, dict) else {}
 
 
+def _web_tavily_enabled() -> bool | None:
+    try:
+        result = subprocess.run(
+            ["hermes", "plugins", "list", "--json"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+    if result.returncode != 0:
+        return None
+
+    try:
+        plugins = json.loads(result.stdout)
+    except ValueError:
+        return None
+
+    if not isinstance(plugins, list):
+        return None
+
+    for plugin in plugins:
+        if not isinstance(plugin, dict):
+            continue
+        if plugin.get("name") == "web-tavily":
+            return plugin.get("status") == "enabled"
+    return False
+
+
 def run_checks() -> list[Check]:
     web = _load_web_config()
     brave_key = _has_brave_api_key()
     tavily_key = bool(_get_env_value(TAVILY_API_KEY_ENV))
+    web_tavily_enabled = _web_tavily_enabled()
     backend = web.get("backend")
     search_backend = web.get("search_backend")
     extract_backend = web.get("extract_backend")
@@ -59,6 +93,17 @@ def run_checks() -> list[Check]:
             "present"
             if tavily_key
             else "missing. Recommended for web_extract. Free key: https://app.tavily.com/",
+        ),
+        Check(
+            "web-tavily plugin",
+            web_tavily_enabled is True,
+            "enabled"
+            if web_tavily_enabled is True
+            else (
+                "disabled. Run: hermes plugins enable web-tavily"
+                if web_tavily_enabled is False
+                else "unable to verify. Run: hermes plugins list"
+            ),
         ),
         Check(
             "web.backend",
@@ -126,6 +171,7 @@ def main(argv: list[str] | None = None) -> int:
             "- Run with --fix after adding keys to apply the recommended "
             "provider config."
         )
+        print("- Run hermes plugins enable web-tavily to use Tavily web_extract.")
         print("- Restart the gateway after changing plugin, env, or provider config.")
         return 1
 

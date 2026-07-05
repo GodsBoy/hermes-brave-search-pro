@@ -1,6 +1,6 @@
 # Brave Search Pro installed
 
-This plugin works best with Brave for search and Tavily for extraction.
+This plugin works best with Brave for search. Tavily extraction is optional and uses Hermes' separate bundled `web-tavily` plugin.
 
 The `brave_search` tool also supports Brave's dedicated LLM Context API. Use `mode="llm"` or `mode="context"` for query-to-context chunks, and `mode="both"` for Brave web results plus those context chunks.
 
@@ -29,6 +29,7 @@ The plugin also applies a Brave Pro compatibility shim when Hermes loads it:
 
 - `web.backend` and `web.search_backend` are set to `brave-pro` when they are missing or still set to `brave-free`.
 - `web.extract_backend` is set to `tavily` when Tavily is credentialed and no extraction provider is selected.
+- `web-tavily` still needs to be enabled separately for Tavily-backed `web_extract` to run.
 - Older Hermes provider pickers are patched in-process so **Brave Search Pro [pro]** opens selected instead of **Brave Search (Free)** when both share the same Brave API key.
 
 Run the doctor to check the full Brave plus Tavily setup:
@@ -48,6 +49,7 @@ Manual equivalent:
 ```bash
 hermes config set web.backend brave-pro
 hermes config set web.search_backend brave-pro
+hermes plugins enable web-tavily  # optional, only needed for Tavily web_extract
 hermes config set web.extract_backend tavily
 ```
 
@@ -57,7 +59,7 @@ You can also confirm or change this interactively:
 hermes tools
 ```
 
-In the menu, choose **Reconfigure an existing tool's provider or API key**, then **Web Search & Scraping**. **Brave Search Pro [pro]** should show as the active search provider. Tavily is the recommended extraction backend, but it needs `TAVILY_API_KEY` first.
+In the menu, choose **Reconfigure an existing tool's provider or API key**, then **Web Search & Scraping**. **Brave Search Pro [pro]** should show as the active search provider. Tavily is the recommended extraction backend, but it needs `web-tavily` enabled and `TAVILY_API_KEY` first.
 
 Restart the gateway after changing plugin or web-provider configuration:
 

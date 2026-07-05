@@ -14,7 +14,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--force",
         action="store_true",
-        help="Overwrite existing web backend settings with Brave Pro and Tavily.",
+        help=(
+            "Overwrite existing web backend settings with Brave Pro and Tavily "
+            "extraction config. Enable web-tavily separately for web_extract."
+        ),
     )
     args = parser.parse_args(argv)
 

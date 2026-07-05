@@ -52,3 +52,10 @@ def test_package_and_plugin_versions_match():
     package_version = pyproject["project"]["version"]
 
     assert f"version: {package_version}\n" in (root / "plugin.yaml").read_text()
+
+
+def test_plugin_manifest_only_requires_brave_key():
+    plugin_manifest = (Path(__file__).resolve().parents[1] / "plugin.yaml").read_text()
+
+    assert "BRAVE_SEARCH_API_KEY" in plugin_manifest
+    assert "TAVILY_API_KEY" not in plugin_manifest
