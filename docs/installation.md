@@ -144,6 +144,25 @@ The explicit `brave_search` tool supports:
 - `suggest`: query suggestions
 - `raw`: raw Brave API payload
 
+Context mode supports advanced Brave retrieval controls:
+
+```python
+brave_search(
+    query="Hermes Agent plugin system",
+    mode="context",
+    context_count=20,
+    max_tokens=8192,
+    max_urls=10,
+    max_snippets=40,
+    freshness="pw",
+    country="US",
+    search_lang="en",
+    context_threshold_mode="balanced",
+)
+```
+
+Use `context_count` for LLM Context depth. The normal `limit` option still controls web, news, image, video, and suggestion result counts. Tavily remains the recommended `web_extract` backend because Brave Search Pro is search and context only in Hermes.
+
 ## Development checkout
 
 ```bash

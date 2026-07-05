@@ -6,6 +6,8 @@ import sys
 from importlib.metadata import entry_points
 from pathlib import Path
 
+import tomllib
+
 
 def test_plugin_import_does_not_import_httpx():
     script = "import hermes_brave_search, sys; print('httpx' in sys.modules)"
@@ -42,3 +44,11 @@ def test_directory_plugin_shim_exposes_register():
     spec.loader.exec_module(module)
 
     assert callable(module.register)
+
+
+def test_package_and_plugin_versions_match():
+    root = Path(__file__).resolve().parents[1]
+    pyproject = tomllib.loads((root / "pyproject.toml").read_text())
+    package_version = pyproject["project"]["version"]
+
+    assert f"version: {package_version}\n" in (root / "plugin.yaml").read_text()
