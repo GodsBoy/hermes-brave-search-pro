@@ -3,9 +3,12 @@ from __future__ import annotations
 import httpx
 
 from hermes_brave_search.client import (
+    DEFAULT_CONTEXT_COUNT,
     BraveSearchClient,
     clamp_context_limit,
+    clamp_context_snippets,
     clamp_context_tokens,
+    clamp_context_tokens_per_url,
     clamp_limit,
 )
 from hermes_brave_search.constants import (
@@ -40,6 +43,10 @@ def test_clamp_limit_bounds_values():
     assert clamp_context_tokens(1) == 1024
     assert clamp_context_tokens(100_000) == 32768
     assert clamp_context_tokens("bad") == 8192
+    assert clamp_context_snippets(0) == 1
+    assert clamp_context_snippets(999) == 256
+    assert clamp_context_tokens_per_url(1) == 512
+    assert clamp_context_tokens_per_url(100_000) == 8192
 
 
 def test_normalises_web_and_llm_context():
@@ -202,10 +209,28 @@ def test_search_calls_web_and_dedicated_context_for_both_mode(monkeypatch):
 
     def fake_get(url, params, headers, timeout):
         calls.append(
-            {"url": url, "params": params, "headers": headers, "timeout": timeout}
+            {
+                "method": "GET",
+                "url": url,
+                "params": params,
+                "headers": headers,
+                "timeout": timeout,
+            }
         )
         if url == BRAVE_SEARCH_ENDPOINT:
             return FakeResponse({"web": {"results": []}})
+        raise AssertionError(f"unexpected url: {url}")
+
+    def fake_post(url, json, headers, timeout):
+        calls.append(
+            {
+                "method": "POST",
+                "url": url,
+                "json": json,
+                "headers": headers,
+                "timeout": timeout,
+            }
+        )
         if url == BRAVE_LLM_CONTEXT_ENDPOINT:
             return FakeResponse(
                 {
@@ -224,6 +249,7 @@ def test_search_calls_web_and_dedicated_context_for_both_mode(monkeypatch):
         raise AssertionError(f"unexpected url: {url}")
 
     monkeypatch.setattr(httpx, "get", fake_get)
+    monkeypatch.setattr(httpx, "post", fake_post)
 
     result = BraveSearchClient(api_key="key").search(
         "hermes",
@@ -247,12 +273,14 @@ def test_search_calls_web_and_dedicated_context_for_both_mode(monkeypatch):
             ],
         },
     }
+    assert calls[0]["method"] == "GET"
     assert calls[0]["url"] == BRAVE_SEARCH_ENDPOINT
     assert calls[0]["params"] == {"q": "hermes", "count": 20}
+    assert calls[1]["method"] == "POST"
     assert calls[1]["url"] == BRAVE_LLM_CONTEXT_ENDPOINT
-    assert calls[1]["params"] == {
+    assert calls[1]["json"] == {
         "q": "hermes",
-        "count": 50,
+        "count": DEFAULT_CONTEXT_COUNT,
         "maximum_number_of_urls": 50,
         "maximum_number_of_tokens": 32768,
         "context_threshold_mode": "strict",
@@ -300,12 +328,169 @@ def test_search_calls_dedicated_llm_context_for_llm_mode(monkeypatch):
     assert seen["url"] == BRAVE_LLM_CONTEXT_ENDPOINT
     assert seen["params"] == {
         "q": "hermes",
-        "count": 3,
-        "maximum_number_of_urls": 3,
+        "count": DEFAULT_CONTEXT_COUNT,
+        "maximum_number_of_urls": DEFAULT_CONTEXT_COUNT,
     }
 
 
-def test_search_rejects_invalid_context_threshold(monkeypatch):
+def test_search_passes_context_options_with_post(monkeypatch):
+    seen = {}
+
+    def fake_post(url, json, headers, timeout):
+        seen.update({"url": url, "json": json, "headers": headers, "timeout": timeout})
+        return FakeResponse(
+            {
+                "grounding": {
+                    "generic": [
+                        {
+                            "title": "Context",
+                            "url": "https://example.test",
+                            "snippets": ["Extracted context"],
+                        }
+                    ]
+                },
+                "sources": {},
+            }
+        )
+
+    def fake_get(*args, **kwargs):
+        raise AssertionError("advanced context request should use POST")
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+    monkeypatch.setattr(httpx, "post", fake_post)
+
+    result = BraveSearchClient(api_key="key").search(
+        "hermes",
+        mode="context",
+        context_count=99,
+        max_tokens=4096,
+        max_urls=4,
+        max_snippets=999,
+        max_tokens_per_url=100_000,
+        max_snippets_per_url=150,
+        context_threshold_mode="lenient",
+        freshness="pw",
+        country="za",
+        search_lang="en",
+        goggles=["https://example.test/goggle"],
+        spellcheck=False,
+        enable_local=True,
+        enable_source_metadata=True,
+        loc_city="Cape Town",
+        loc_country="ZA",
+    )
+
+    assert result["success"] is True
+    assert seen["url"] == BRAVE_LLM_CONTEXT_ENDPOINT
+    assert seen["json"] == {
+        "q": "hermes",
+        "count": 50,
+        "maximum_number_of_urls": 4,
+        "maximum_number_of_tokens": 4096,
+        "maximum_number_of_snippets": 256,
+        "maximum_number_of_tokens_per_url": 8192,
+        "maximum_number_of_snippets_per_url": 100,
+        "context_threshold_mode": "lenient",
+        "freshness": "pw",
+        "country": "ZA",
+        "search_lang": "en",
+        "goggles": ["https://example.test/goggle"],
+        "spellcheck": False,
+        "enable_local": True,
+        "enable_source_metadata": True,
+    }
+    assert seen["headers"]["Content-Type"] == "application/json"
+    assert seen["headers"]["X-Loc-City"] == "Cape Town"
+    assert seen["headers"]["X-Loc-Country"] == "ZA"
+
+
+def test_simple_context_request_still_uses_get(monkeypatch):
+    seen = {}
+
+    def fake_get(url, params, headers, timeout):
+        seen.update({"url": url, "params": params, "headers": headers})
+        return FakeResponse({"grounding": {"generic": []}, "sources": {}})
+
+    def fake_post(*args, **kwargs):
+        raise AssertionError("simple context request should use GET")
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+    monkeypatch.setattr(httpx, "post", fake_post)
+
+    result = BraveSearchClient(api_key="key").search("hermes", mode="context")
+
+    assert result == {"success": True, "data": {"llm_context": []}}
+    assert seen["url"] == BRAVE_LLM_CONTEXT_ENDPOINT
+    assert seen["params"] == {
+        "q": "hermes",
+        "count": DEFAULT_CONTEXT_COUNT,
+        "maximum_number_of_urls": DEFAULT_CONTEXT_COUNT,
+    }
+
+
+def test_context_numeric_zero_values_are_clamped(monkeypatch):
+    seen = {}
+
+    def fake_get(url, params, headers, timeout):
+        seen.update({"url": url, "params": params, "headers": headers})
+        return FakeResponse({"grounding": {"generic": []}, "sources": {}})
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+
+    result = BraveSearchClient(api_key="key").search(
+        "hermes",
+        mode="context",
+        context_count=0,
+        max_urls=0,
+    )
+
+    assert result == {"success": True, "data": {"llm_context": []}}
+    assert seen["params"] == {
+        "q": "hermes",
+        "count": 1,
+        "maximum_number_of_urls": 1,
+    }
+
+
+def test_retry_transient_status_then_success(monkeypatch):
+    calls = 0
+
+    def fake_get(url, params, headers, timeout):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return FakeResponse({"error": "slow down"}, status_code=429)
+        return FakeResponse({"web": {"results": []}})
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+
+    result = BraveSearchClient(api_key="key", backoff_seconds=0).search(
+        "hermes", mode="web"
+    )
+
+    assert result == {"success": True, "data": {"web": []}}
+    assert calls == 2
+
+
+def test_does_not_retry_auth_failure(monkeypatch):
+    calls = 0
+
+    def fake_get(url, params, headers, timeout):
+        nonlocal calls
+        calls += 1
+        return FakeResponse({"error": "unauthorized"}, status_code=401)
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+
+    result = BraveSearchClient(api_key="key", backoff_seconds=0).search(
+        "hermes", mode="web"
+    )
+
+    assert result["success"] is False
+    assert calls == 1
+
+
+def test_search_rejects_invalid_context_values(monkeypatch):
     called = False
 
     def fake_get(*args, **kwargs):
@@ -322,5 +507,15 @@ def test_search_rejects_invalid_context_threshold(monkeypatch):
     assert result == {
         "success": False,
         "error": "Unsupported context_threshold_mode: wide-open",
+    }
+    assert called is False
+
+    result = BraveSearchClient(api_key="key").search(
+        "hermes", mode="context", freshness="yesterday"
+    )
+
+    assert result == {
+        "success": False,
+        "error": "Unsupported freshness: yesterday",
     }
     assert called is False

@@ -4,6 +4,8 @@ This plugin works best with Brave for search and Tavily for extraction.
 
 The `brave_search` tool also supports Brave's dedicated LLM Context API. Use `mode="llm"` or `mode="context"` for query-to-context chunks, and `mode="both"` for Brave web results plus those context chunks.
 
+Context mode supports options such as `context_count`, `max_tokens`, `max_urls`, `max_snippets`, `freshness`, `country`, `search_lang`, `goggles`, `enable_local`, and `context_threshold_mode`. Use `context_count` for LLM Context depth; normal `limit` still controls web, news, image, video, and suggestion result counts.
+
 If you skipped a key during install, get keys here:
 
 - Brave Search API: <https://brave.com/search/api/>

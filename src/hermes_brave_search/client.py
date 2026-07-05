@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+import re
+import time
 from dataclasses import dataclass
 from typing import Any, ClassVar
 
@@ -10,12 +12,43 @@ import httpx
 
 from .constants import BRAVE_API_KEY_COMPAT_ENV, BRAVE_API_KEY_ENV, BRAVE_MODE_ENDPOINTS
 
-DEFAULT_TIMEOUT_SECONDS = 20.0
+DEFAULT_TIMEOUT_SECONDS = 30.0
 MAX_LIMIT = 20
+DEFAULT_CONTEXT_COUNT = 20
 MAX_CONTEXT_LIMIT = 50
 MIN_CONTEXT_TOKENS = 1024
 MAX_CONTEXT_TOKENS = 32768
+MAX_CONTEXT_SNIPPETS = 256
+MIN_CONTEXT_TOKENS_PER_URL = 512
+MAX_CONTEXT_TOKENS_PER_URL = 8192
+MAX_CONTEXT_SNIPPETS_PER_URL = 100
 CONTEXT_THRESHOLD_MODES = {"balanced", "disabled", "lenient", "strict"}
+FRESHNESS_MODES = {"pd", "pw", "pm", "py"}
+FRESHNESS_RANGE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}to\d{4}-\d{2}-\d{2}$")
+SEARCH_LANG_RE = re.compile(r"^[A-Za-z][A-Za-z-]{1,15}$")
+CONTEXT_POST_PARAMS = {
+    "context_threshold_mode",
+    "country",
+    "search_lang",
+    "freshness",
+    "goggles",
+    "spellcheck",
+    "maximum_number_of_snippets",
+    "maximum_number_of_tokens_per_url",
+    "maximum_number_of_snippets_per_url",
+    "enable_local",
+    "enable_source_metadata",
+}
+LOCATION_HEADER_MAP = {
+    "loc_lat": "X-Loc-Lat",
+    "loc_long": "X-Loc-Long",
+    "loc_timezone": "X-Loc-Timezone",
+    "loc_city": "X-Loc-City",
+    "loc_state": "X-Loc-State",
+    "loc_state_name": "X-Loc-State-Name",
+    "loc_country": "X-Loc-Country",
+    "loc_postal_code": "X-Loc-Postal-Code",
+}
 
 
 @dataclass(slots=True)
@@ -25,6 +58,8 @@ class BraveSearchClient:
     api_key: str | None = None
     timeout: float = DEFAULT_TIMEOUT_SECONDS
     base_headers: dict[str, str] | None = None
+    max_retries: int = 2
+    backoff_seconds: float = 0.25
 
     MODE_ENDPOINTS: ClassVar[dict[str, str]] = BRAVE_MODE_ENDPOINTS
 
@@ -43,9 +78,28 @@ class BraveSearchClient:
         query: str,
         mode: str = "both",
         limit: int = 5,
+        context_count: int | None = None,
         max_tokens: int | None = None,
         max_urls: int | None = None,
+        max_snippets: int | None = None,
+        max_tokens_per_url: int | None = None,
+        max_snippets_per_url: int | None = None,
         context_threshold_mode: str | None = None,
+        freshness: str | None = None,
+        country: str | None = None,
+        search_lang: str | None = None,
+        goggles: str | list[str] | None = None,
+        spellcheck: bool | str | None = None,
+        enable_local: bool | str | None = None,
+        enable_source_metadata: bool | str | None = None,
+        loc_lat: str | float | int | None = None,
+        loc_long: str | float | int | None = None,
+        loc_timezone: str | None = None,
+        loc_city: str | None = None,
+        loc_state: str | None = None,
+        loc_state_name: str | None = None,
+        loc_country: str | None = None,
+        loc_postal_code: str | None = None,
     ) -> dict[str, Any]:
         """Run a Brave search mode and return a JSON-serialisable envelope."""
 
@@ -57,15 +111,31 @@ class BraveSearchClient:
             }
         if not query or not query.strip():
             return {"success": False, "error": "query is required"}
-        threshold = normalise_context_threshold(context_threshold_mode)
-        if context_threshold_mode and threshold is None:
-            return {
-                "success": False,
-                "error": (
-                    "Unsupported context_threshold_mode: "
-                    f"{context_threshold_mode}"
-                ),
-            }
+
+        context_options: dict[str, Any] | None = None
+        if mode in {"both", "llm", "context"}:
+            normalized = normalise_context_options(
+                context_threshold_mode=context_threshold_mode,
+                freshness=freshness,
+                country=country,
+                search_lang=search_lang,
+                goggles=goggles,
+                spellcheck=spellcheck,
+                enable_local=enable_local,
+                enable_source_metadata=enable_source_metadata,
+                loc_lat=loc_lat,
+                loc_long=loc_long,
+                loc_timezone=loc_timezone,
+                loc_city=loc_city,
+                loc_state=loc_state,
+                loc_state_name=loc_state_name,
+                loc_country=loc_country,
+                loc_postal_code=loc_postal_code,
+            )
+            if not normalized["success"]:
+                return {"success": False, "error": normalized["error"]}
+            context_options = normalized
+
         api_key = self.resolved_api_key()
         if not api_key:
             return {
@@ -73,27 +143,41 @@ class BraveSearchClient:
                 "error": "BRAVE_SEARCH_API_KEY is required",
             }
 
-        headers = self._headers(api_key)
+        headers = self._headers(
+            api_key,
+            location_headers=(context_options or {}).get("headers", {}),
+        )
         if mode == "both":
             return self._search_both(
                 query=query,
                 limit=limit,
                 headers=headers,
+                context_count=context_count,
                 max_tokens=max_tokens,
                 max_urls=max_urls,
-                context_threshold_mode=threshold,
+                max_snippets=max_snippets,
+                max_tokens_per_url=max_tokens_per_url,
+                max_snippets_per_url=max_snippets_per_url,
+                context_params=(context_options or {}).get("params", {}),
             )
 
         params = self._params_for_mode(
             query=query,
             mode=mode,
             limit=limit,
+            context_count=context_count,
             max_tokens=max_tokens,
             max_urls=max_urls,
-            context_threshold_mode=threshold,
+            max_snippets=max_snippets,
+            max_tokens_per_url=max_tokens_per_url,
+            max_snippets_per_url=max_snippets_per_url,
+            context_params=(context_options or {}).get("params", {}),
         )
         request_result = self._get_payload(
-            endpoint=self.MODE_ENDPOINTS[mode], params=params, headers=headers
+            endpoint=self.MODE_ENDPOINTS[mode],
+            params=params,
+            headers=headers,
+            method=self._method_for_mode(mode=mode, params=params, headers=headers),
         )
         if not request_result["success"]:
             return {"success": False, "error": request_result["error"]}
@@ -148,9 +232,13 @@ class BraveSearchClient:
         query: str,
         limit: int,
         headers: dict[str, str],
+        context_count: int | None,
         max_tokens: int | None,
         max_urls: int | None,
-        context_threshold_mode: str | None,
+        max_snippets: int | None,
+        max_tokens_per_url: int | None,
+        max_snippets_per_url: int | None,
+        context_params: dict[str, Any],
     ) -> dict[str, Any]:
         web_result = self._get_payload(
             endpoint=self.MODE_ENDPOINTS["web"],
@@ -160,16 +248,25 @@ class BraveSearchClient:
         if not web_result["success"]:
             return {"success": False, "error": web_result["error"]}
 
+        context_request_params = self._params_for_context(
+            query=query,
+            context_count=context_count,
+            max_tokens=max_tokens,
+            max_urls=max_urls,
+            max_snippets=max_snippets,
+            max_tokens_per_url=max_tokens_per_url,
+            max_snippets_per_url=max_snippets_per_url,
+            context_params=context_params,
+        )
         context_result = self._get_payload(
             endpoint=self.MODE_ENDPOINTS["context"],
-            params=self._params_for_context(
-                query=query,
-                limit=limit,
-                max_tokens=max_tokens,
-                max_urls=max_urls,
-                context_threshold_mode=context_threshold_mode,
-            ),
+            params=context_request_params,
             headers=headers,
+            method=self._method_for_mode(
+                mode="context",
+                params=context_request_params,
+                headers=headers,
+            ),
         )
         data: dict[str, Any] = {
             "web": self._normalise_web_results(web_result["payload"]),
@@ -184,45 +281,81 @@ class BraveSearchClient:
 
         return {"success": True, "data": data}
 
-    def _headers(self, api_key: str) -> dict[str, str]:
+    def _headers(
+        self, api_key: str, location_headers: dict[str, str] | None = None
+    ) -> dict[str, str]:
         return {
             "Accept": "application/json",
             "Accept-Encoding": "gzip",
             "X-Subscription-Token": api_key,
+            **(location_headers or {}),
             **(self.base_headers or {}),
         }
 
     def _get_payload(
-        self, endpoint: str, params: dict[str, Any], headers: dict[str, str]
+        self,
+        endpoint: str,
+        params: dict[str, Any],
+        headers: dict[str, str],
+        method: str = "GET",
     ) -> dict[str, Any]:
-        try:
-            response = httpx.get(
-                endpoint,
-                params=params,
-                headers=headers,
-                timeout=self.timeout,
-            )
-            response.raise_for_status()
-            return {"success": True, "payload": response.json()}
-        except (httpx.HTTPError, ValueError) as exc:
-            return {"success": False, "error": str(exc)}
+        attempts = max(0, int(self.max_retries)) + 1
+        for attempt in range(attempts):
+            try:
+                if method == "POST":
+                    response = httpx.post(
+                        endpoint,
+                        json=params,
+                        headers={**headers, "Content-Type": "application/json"},
+                        timeout=self.timeout,
+                    )
+                else:
+                    response = httpx.get(
+                        endpoint,
+                        params=params,
+                        headers=headers,
+                        timeout=self.timeout,
+                    )
+                response.raise_for_status()
+                return {"success": True, "payload": response.json()}
+            except httpx.HTTPStatusError as exc:
+                if not should_retry_status(exc.response.status_code) or (
+                    attempt == attempts - 1
+                ):
+                    return {"success": False, "error": str(exc)}
+                self._sleep_before_retry(attempt)
+            except (httpx.TimeoutException, httpx.RequestError) as exc:
+                if attempt == attempts - 1:
+                    return {"success": False, "error": str(exc)}
+                self._sleep_before_retry(attempt)
+            except ValueError as exc:
+                return {"success": False, "error": str(exc)}
+
+        return {"success": False, "error": "Brave request failed"}
 
     def _params_for_mode(
         self,
         query: str,
         mode: str,
         limit: int,
+        context_count: int | None,
         max_tokens: int | None,
         max_urls: int | None,
-        context_threshold_mode: str | None,
+        max_snippets: int | None,
+        max_tokens_per_url: int | None,
+        max_snippets_per_url: int | None,
+        context_params: dict[str, Any],
     ) -> dict[str, Any]:
         if mode in {"llm", "context"}:
             return self._params_for_context(
                 query=query,
-                limit=limit,
+                context_count=context_count,
                 max_tokens=max_tokens,
                 max_urls=max_urls,
-                context_threshold_mode=context_threshold_mode,
+                max_snippets=max_snippets,
+                max_tokens_per_url=max_tokens_per_url,
+                max_snippets_per_url=max_snippets_per_url,
+                context_params=context_params,
             )
 
         params = self._params_for_web(query=query, limit=limit)
@@ -236,22 +369,56 @@ class BraveSearchClient:
     def _params_for_context(
         self,
         query: str,
-        limit: int,
+        context_count: int | None,
         max_tokens: int | None,
         max_urls: int | None,
-        context_threshold_mode: str | None,
+        max_snippets: int | None,
+        max_tokens_per_url: int | None,
+        max_snippets_per_url: int | None,
+        context_params: dict[str, Any],
     ) -> dict[str, Any]:
-        count = clamp_context_limit(limit)
+        count = clamp_context_limit(
+            DEFAULT_CONTEXT_COUNT if context_count is None else context_count
+        )
         params: dict[str, Any] = {
             "q": query.strip(),
             "count": count,
-            "maximum_number_of_urls": clamp_context_limit(max_urls or count),
+            "maximum_number_of_urls": clamp_context_limit(
+                count if max_urls is None else max_urls
+            ),
         }
         if max_tokens is not None:
             params["maximum_number_of_tokens"] = clamp_context_tokens(max_tokens)
-        if context_threshold_mode:
-            params["context_threshold_mode"] = context_threshold_mode
+        if max_snippets is not None:
+            params["maximum_number_of_snippets"] = clamp_context_snippets(
+                max_snippets
+            )
+        if max_tokens_per_url is not None:
+            params["maximum_number_of_tokens_per_url"] = (
+                clamp_context_tokens_per_url(max_tokens_per_url)
+            )
+        if max_snippets_per_url is not None:
+            params["maximum_number_of_snippets_per_url"] = (
+                clamp_context_snippets_per_url(max_snippets_per_url)
+            )
+        params.update(context_params)
         return params
+
+    def _method_for_mode(
+        self, mode: str, params: dict[str, Any], headers: dict[str, str]
+    ) -> str:
+        if mode not in {"both", "llm", "context"}:
+            return "GET"
+        if any(key in params for key in CONTEXT_POST_PARAMS):
+            return "POST"
+        if any(key in headers for key in LOCATION_HEADER_MAP.values()):
+            return "POST"
+        return "GET"
+
+    def _sleep_before_retry(self, attempt: int) -> None:
+        if self.backoff_seconds <= 0:
+            return
+        time.sleep(self.backoff_seconds * (attempt + 1))
 
     def _normalise_web_results(self, payload: dict[str, Any]) -> list[dict[str, Any]]:
         web_payload = payload.get("web")
@@ -415,6 +582,36 @@ def clamp_context_tokens(tokens: Any) -> int:
     return max(MIN_CONTEXT_TOKENS, min(parsed, MAX_CONTEXT_TOKENS))
 
 
+def clamp_context_snippets(snippets: Any) -> int:
+    """Clamp Brave LLM Context total snippet count parameters."""
+
+    try:
+        parsed = int(snippets)
+    except (TypeError, ValueError):
+        parsed = 50
+    return max(1, min(parsed, MAX_CONTEXT_SNIPPETS))
+
+
+def clamp_context_tokens_per_url(tokens: Any) -> int:
+    """Clamp Brave LLM Context per-URL token budget parameters."""
+
+    try:
+        parsed = int(tokens)
+    except (TypeError, ValueError):
+        parsed = 4096
+    return max(MIN_CONTEXT_TOKENS_PER_URL, min(parsed, MAX_CONTEXT_TOKENS_PER_URL))
+
+
+def clamp_context_snippets_per_url(snippets: Any) -> int:
+    """Clamp Brave LLM Context per-URL snippet count parameters."""
+
+    try:
+        parsed = int(snippets)
+    except (TypeError, ValueError):
+        parsed = 50
+    return max(1, min(parsed, MAX_CONTEXT_SNIPPETS_PER_URL))
+
+
 def normalise_context_threshold(value: str | None) -> str | None:
     """Return a validated Brave LLM Context threshold mode."""
 
@@ -426,6 +623,182 @@ def normalise_context_threshold(value: str | None) -> str | None:
     if parsed not in CONTEXT_THRESHOLD_MODES:
         return None
     return parsed
+
+
+def normalise_freshness(value: str | None) -> str | None:
+    """Return a validated Brave freshness value."""
+
+    if value is None:
+        return None
+    parsed = str(value).strip().lower()
+    if not parsed:
+        return None
+    if parsed in FRESHNESS_MODES or FRESHNESS_RANGE_RE.match(parsed):
+        return parsed
+    return None
+
+
+def normalise_country(value: str | None) -> str | None:
+    """Return a normalized two-letter country code."""
+
+    if value is None:
+        return None
+    parsed = str(value).strip().upper()
+    if not parsed:
+        return None
+    if len(parsed) == 2 and parsed.isalpha():
+        return parsed
+    return None
+
+
+def normalise_search_lang(value: str | None) -> str | None:
+    """Return a normalized Brave search language preference."""
+
+    if value is None:
+        return None
+    parsed = str(value).strip().lower()
+    if not parsed:
+        return None
+    if SEARCH_LANG_RE.match(parsed):
+        return parsed
+    return None
+
+
+def normalise_goggles(value: str | list[str] | None) -> str | list[str] | None:
+    """Return a validated Brave Goggles value."""
+
+    if value is None:
+        return None
+    if isinstance(value, str):
+        parsed = value.strip()
+        return parsed or None
+    if isinstance(value, list):
+        parsed = [str(item).strip() for item in value if str(item).strip()]
+        if not parsed:
+            return None
+        if len(parsed) > 3:
+            return None
+        return parsed
+    return None
+
+
+def normalise_bool(value: bool | str | None) -> bool | None:
+    """Return a bool from JSON booleans or common string booleans."""
+
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    parsed = str(value).strip().lower()
+    if parsed in {"true", "1", "yes", "on"}:
+        return True
+    if parsed in {"false", "0", "no", "off"}:
+        return False
+    return None
+
+
+def normalise_location_headers(**values: Any) -> dict[str, str]:
+    """Convert optional location fields to Brave location headers."""
+
+    headers: dict[str, str] = {}
+    for key, header in LOCATION_HEADER_MAP.items():
+        value = values.get(key)
+        if value is None:
+            continue
+        parsed = str(value).strip()
+        if parsed:
+            headers[header] = parsed
+    return headers
+
+
+def normalise_context_options(
+    *,
+    context_threshold_mode: str | None,
+    freshness: str | None,
+    country: str | None,
+    search_lang: str | None,
+    goggles: str | list[str] | None,
+    spellcheck: bool | str | None,
+    enable_local: bool | str | None,
+    enable_source_metadata: bool | str | None,
+    loc_lat: str | float | int | None,
+    loc_long: str | float | int | None,
+    loc_timezone: str | None,
+    loc_city: str | None,
+    loc_state: str | None,
+    loc_state_name: str | None,
+    loc_country: str | None,
+    loc_postal_code: str | None,
+) -> dict[str, Any]:
+    """Normalize context query parameters and headers."""
+
+    params: dict[str, Any] = {}
+
+    threshold = normalise_context_threshold(context_threshold_mode)
+    if context_threshold_mode and threshold is None:
+        return {
+            "success": False,
+            "error": f"Unsupported context_threshold_mode: {context_threshold_mode}",
+        }
+    if threshold:
+        params["context_threshold_mode"] = threshold
+
+    normalized_freshness = normalise_freshness(freshness)
+    if freshness and normalized_freshness is None:
+        return {"success": False, "error": f"Unsupported freshness: {freshness}"}
+    if normalized_freshness:
+        params["freshness"] = normalized_freshness
+
+    normalized_country = normalise_country(country)
+    if country and normalized_country is None:
+        return {"success": False, "error": f"Unsupported country: {country}"}
+    if normalized_country:
+        params["country"] = normalized_country
+
+    normalized_search_lang = normalise_search_lang(search_lang)
+    if search_lang and normalized_search_lang is None:
+        return {
+            "success": False,
+            "error": f"Unsupported search_lang: {search_lang}",
+        }
+    if normalized_search_lang:
+        params["search_lang"] = normalized_search_lang
+
+    normalized_goggles = normalise_goggles(goggles)
+    if goggles and normalized_goggles is None:
+        return {"success": False, "error": "Unsupported goggles value"}
+    if normalized_goggles:
+        params["goggles"] = normalized_goggles
+
+    for key, value in {
+        "spellcheck": spellcheck,
+        "enable_local": enable_local,
+        "enable_source_metadata": enable_source_metadata,
+    }.items():
+        normalized = normalise_bool(value)
+        if value is not None and normalized is None:
+            return {"success": False, "error": f"Unsupported {key}: {value}"}
+        if normalized is not None:
+            params[key] = normalized
+
+    headers = normalise_location_headers(
+        loc_lat=loc_lat,
+        loc_long=loc_long,
+        loc_timezone=loc_timezone,
+        loc_city=loc_city,
+        loc_state=loc_state,
+        loc_state_name=loc_state_name,
+        loc_country=normalise_country(loc_country) or loc_country,
+        loc_postal_code=loc_postal_code,
+    )
+
+    return {"success": True, "params": params, "headers": headers}
+
+
+def should_retry_status(status_code: int) -> bool:
+    """Return True for Brave HTTP statuses worth retrying."""
+
+    return status_code == 429 or status_code >= 500
 
 
 def normalise_snippets(snippets: Any) -> list[Any]:

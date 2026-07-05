@@ -29,7 +29,17 @@ BRAVE_SEARCH_SCHEMA = {
                 "minimum": 1,
                 "maximum": 20,
                 "default": 5,
-                "description": "Maximum result count where supported.",
+                "description": "Maximum web/media result count where supported.",
+            },
+            "context_count": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 50,
+                "default": 20,
+                "description": (
+                    "Number of search results Brave should consider for "
+                    "mode='both', 'llm', or 'context'."
+                ),
             },
             "max_tokens": {
                 "type": "integer",
@@ -46,8 +56,26 @@ BRAVE_SEARCH_SCHEMA = {
                 "maximum": 50,
                 "description": (
                     "Optional maximum number of URLs returned by Brave LLM "
-                    "Context API. Defaults to the requested limit."
+                    "Context API. Defaults to context_count."
                 ),
+            },
+            "max_snippets": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 256,
+                "description": "Optional total Brave LLM Context snippet budget.",
+            },
+            "max_tokens_per_url": {
+                "type": "integer",
+                "minimum": 512,
+                "maximum": 8192,
+                "description": "Optional Brave LLM Context token budget per URL.",
+            },
+            "max_snippets_per_url": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100,
+                "description": "Optional Brave LLM Context snippet budget per URL.",
             },
             "context_threshold_mode": {
                 "type": "string",
@@ -55,6 +83,85 @@ BRAVE_SEARCH_SCHEMA = {
                 "description": (
                     "Optional relevance threshold for Brave LLM Context API."
                 ),
+            },
+            "freshness": {
+                "type": "string",
+                "description": (
+                    "Optional freshness filter: pd, pw, pm, py, or "
+                    "YYYY-MM-DDtoYYYY-MM-DD."
+                ),
+            },
+            "country": {
+                "type": "string",
+                "minLength": 2,
+                "maxLength": 2,
+                "description": "Optional two-letter country code for Brave results.",
+            },
+            "search_lang": {
+                "type": "string",
+                "description": "Optional Brave search language preference.",
+            },
+            "goggles": {
+                "oneOf": [
+                    {"type": "string"},
+                    {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "minItems": 1,
+                        "maxItems": 3,
+                    },
+                ],
+                "description": "Optional Brave Goggles URL, definition, or list.",
+            },
+            "spellcheck": {
+                "type": "boolean",
+                "description": "Whether Brave should spellcheck the query.",
+            },
+            "enable_local": {
+                "type": "boolean",
+                "description": "Whether Brave should force local recall.",
+            },
+            "enable_source_metadata": {
+                "type": "boolean",
+                "description": "Whether Brave should enrich LLM Context sources.",
+            },
+            "loc_lat": {
+                "type": "number",
+                "description": "Optional latitude for Brave location-aware context.",
+            },
+            "loc_long": {
+                "type": "number",
+                "description": "Optional longitude for Brave location-aware context.",
+            },
+            "loc_timezone": {
+                "type": "string",
+                "description": "Optional IANA timezone for Brave location headers.",
+            },
+            "loc_city": {
+                "type": "string",
+                "description": "Optional city for Brave location-aware context.",
+            },
+            "loc_state": {
+                "type": "string",
+                "description": (
+                    "Optional state or region code for Brave location headers."
+                ),
+            },
+            "loc_state_name": {
+                "type": "string",
+                "description": (
+                    "Optional state or region name for Brave location headers."
+                ),
+            },
+            "loc_country": {
+                "type": "string",
+                "minLength": 2,
+                "maxLength": 2,
+                "description": "Optional country code for Brave location headers.",
+            },
+            "loc_postal_code": {
+                "type": "string",
+                "description": "Optional postal code for Brave location headers.",
             },
         },
         "required": ["query"],

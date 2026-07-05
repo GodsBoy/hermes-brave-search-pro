@@ -17,7 +17,7 @@
 
 Brave Search Pro as a first-class Hermes Agent plugin.
 
-Brave handles fast, index-backed discovery for `web_search`, Tavily keeps doing URL extraction, and the explicit `brave_search` tool adds Brave-specific modes plus dedicated Brave LLM Context API chunks when you want them.
+Brave handles fast, index-backed discovery for `web_search`, Tavily keeps doing URL extraction, and the explicit `brave_search` tool adds Brave-specific modes plus dedicated Brave LLM Context API chunks with source, freshness, locale, and token-budget controls when you want them.
 
 ## Why this exists
 
@@ -35,6 +35,8 @@ Hermes already separates search from extraction. This plugin leans into that des
 - Runtime compatibility shim that safely prefers Brave Pro over Brave Free when both share the same Brave API key
 - Advanced Hermes tool named `brave_search`
 - Dedicated Brave LLM Context API support for query-to-context chunks
+- Context controls for freshness, country, language, Goggles, local recall, source metadata, snippets, and token budgets
+- Bounded retry handling for transient Brave API failures
 - Search-only provider so Tavily remains the extraction backend
 - Shared Brave client with structured errors and response normalisation
 - Mocked test suite that does not require live Brave credentials
@@ -167,13 +169,36 @@ brave_search(query="Hermes Agent plugin system", mode="both", limit=5)
 brave_search(
     query="Hermes Agent plugin system",
     mode="context",
-    limit=5,
+    context_count=20,
     max_tokens=8192,
+    max_snippets=40,
+    freshness="pw",
+    country="US",
+    search_lang="en",
     context_threshold_mode="balanced",
 )
 ```
 
-`mode="both"` now makes two Brave calls: normal web search for links, then the dedicated LLM Context endpoint for extracted chunks. If the context call fails, the tool still returns web results and includes `llm_context_error` so the failure is visible. `mode="llm"` and `mode="context"` call only the dedicated context endpoint.
+`mode="both"` makes two Brave calls: normal web search for links, then the dedicated LLM Context endpoint for extracted chunks. If the context call fails, the tool still returns web results and includes `llm_context_error` so the failure is visible. `mode="llm"` and `mode="context"` call only the dedicated context endpoint.
+
+Context mode uses Brave's agent-facing default depth (`context_count=20`) unless you override it. The standard `limit` option still controls web, news, image, video, and suggestion result counts.
+
+Optional context controls include:
+
+- `context_count`: search results Brave considers for context, 1 to 50
+- `max_tokens`: total context token budget, 1024 to 32768
+- `max_urls`: maximum URLs in context, 1 to 50, defaults to `context_count`
+- `max_snippets`: total snippets, 1 to 256
+- `max_tokens_per_url`: per-URL token budget, 512 to 8192
+- `max_snippets_per_url`: per-URL snippet budget, 1 to 100
+- `context_threshold_mode`: `strict`, `balanced`, `lenient`, or `disabled`
+- `freshness`: `pd`, `pw`, `pm`, `py`, or `YYYY-MM-DDtoYYYY-MM-DD`
+- `country` and `search_lang`: locale controls for Brave ranking
+- `goggles`: a Brave Goggles URL, inline definition, or list of up to 3 entries
+- `spellcheck`, `enable_local`, and `enable_source_metadata`: boolean Brave context options
+- `loc_lat`, `loc_long`, `loc_timezone`, `loc_city`, `loc_state`, `loc_state_name`, `loc_country`, and `loc_postal_code`: optional location hints for local recall
+
+The client uses GET for simple context calls and POST for advanced context calls with filters, Goggles, local recall, metadata, or location headers. Transient Brave failures such as timeouts, rate limits, and 5xx responses are retried with a small bounded retry budget.
 
 ## Architecture
 
