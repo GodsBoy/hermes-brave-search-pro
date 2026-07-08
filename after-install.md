@@ -2,9 +2,9 @@
 
 This plugin works best with Brave for search. Tavily extraction is optional and uses Hermes' separate bundled `web-tavily` plugin.
 
-The `brave_search` tool also supports Brave's dedicated LLM Context API. Use `mode="llm"` or `mode="context"` for query-to-context chunks, and `mode="both"` for Brave web results plus those context chunks.
+The `brave_search` tool also supports Brave's dedicated LLM Context API and Brave Place Search API. Use `mode="llm"` or `mode="context"` for query-to-context chunks, `mode="both"` for Brave web results plus those context chunks, `mode="place"` or `mode="local"` for Place Search, and `mode="pois"` or `mode="descriptions"` for follow-up POI details.
 
-Context mode supports options such as `context_count`, `max_tokens`, `max_urls`, `max_snippets`, `freshness`, `country`, `search_lang`, `goggles`, `enable_local`, and `context_threshold_mode`. Use `context_count` for LLM Context depth; normal `limit` still controls web, news, image, video, and suggestion result counts.
+Context mode supports options such as `context_count`, `max_tokens`, `max_urls`, `max_snippets`, `freshness`, `country`, `search_lang`, `goggles`, `enable_local`, and `context_threshold_mode`. Place mode supports `latitude`, `longitude`, `location`, `radius`, `count`, `country`, `search_lang`, `ui_lang`, `units`, `safesearch`, and `geoloc`; `pois` and `descriptions` use temporary `ids`, with `pois` also accepting `search_lang`, `ui_lang`, and `units`. Use `context_count` for LLM Context depth; normal `limit` still controls web, news, image, video, and suggestion result counts, while Place Search uses `count` up to 100. Brave bills Place Search requests separately from Web Search.
 
 If you skipped a key during install, get keys here:
 

@@ -17,7 +17,7 @@
 
 Brave Search Pro as a first-class Hermes Agent plugin.
 
-Brave handles fast, index-backed discovery for `web_search`, and the explicit `brave_search` tool adds Brave-specific modes plus dedicated Brave LLM Context API chunks with source, freshness, locale, and token-budget controls when you want them. Tavily-backed `web_extract` remains a separate optional Hermes plugin pairing.
+Brave handles fast, index-backed discovery for `web_search`, and the explicit `brave_search` tool adds Brave-specific modes plus dedicated Brave LLM Context API chunks and Brave Place Search API support when you want richer agent context. Tavily-backed `web_extract` remains a separate optional Hermes plugin pairing.
 
 ## Why this exists
 
@@ -26,6 +26,7 @@ Hermes already separates search from extraction. This plugin leans into that des
 - **Discovery:** `web_search` uses Brave Search Pro through the `brave-pro` backend.
 - **Extraction:** `web_extract` can stay on Tavily when Hermes' bundled `web-tavily` plugin is enabled and `web.extract_backend` is set to `tavily`.
 - **Query context:** `brave_search(mode="llm")` and `brave_search(mode="context")` call Brave's dedicated `/res/v1/llm/context` endpoint.
+- **Place search:** `brave_search(mode="place")` and `brave_search(mode="local")` call Brave's `/res/v1/local/place_search` endpoint, with follow-up POI detail modes for `/pois` and `/descriptions`.
 - **Advanced search:** `brave_search` exposes Brave modes that do not fit the standard `web_search` contract.
 - **No source patching:** install the plugin, let its compatibility shim configure safe defaults, and keep updating Hermes normally.
 
@@ -36,6 +37,7 @@ Hermes already separates search from extraction. This plugin leans into that des
 - Advanced Hermes tool named `brave_search`
 - Dedicated Brave LLM Context API support for query-to-context chunks
 - Context controls for freshness, country, language, Goggles, local recall, source metadata, snippets, and token budgets
+- Brave Place Search API modes for places, local Explore Mode, POI details, and POI descriptions
 - Bounded retry handling for transient Brave API failures
 - Search-only provider so extraction stays on a dedicated backend such as Hermes' bundled `web-tavily`
 - Shared Brave client with structured errors and response normalisation
@@ -84,6 +86,7 @@ web_search(query="Hermes Agent plugins", limit=5)   # Brave Search Pro
 web_extract(urls=["https://example.com/article"])  # Tavily
 brave_search(query="Hermes Agent", mode="news")   # Brave-specific mode
 brave_search(query="Hermes Agent", mode="context")  # Brave LLM Context API
+brave_search(query="coffee shops", mode="place", location="Cape Town South Africa")
 ```
 
 Restart the gateway after installing or changing plugin configuration:
@@ -152,6 +155,7 @@ web_search(query="Hermes Agent plugins", limit=5)   # Brave Search Pro
 web_extract(urls=["https://example.com/article"])  # Tavily
 brave_search(query="Hermes Agent", mode="news")   # Brave-specific mode
 brave_search(query="Hermes Agent", mode="context")  # Brave LLM Context API
+brave_search(query="coffee shops", mode="place", location="Cape Town South Africa")
 ```
 
 ## Advanced `brave_search` modes
@@ -167,6 +171,10 @@ brave_search(query="Hermes Agent", mode="context")  # Brave LLM Context API
 - `videos`: video search
 - `discussions`: discussion-focused results
 - `suggest`: query suggestions
+- `place`: Brave Place Search through `/res/v1/local/place_search`
+- `local`: alias for `place`, including Explore Mode when no query is supplied
+- `pois`: follow-up POI details from `/res/v1/local/pois`
+- `descriptions`: follow-up POI descriptions from `/res/v1/local/descriptions`
 - `raw`: raw Brave API payload for debugging and exploration
 
 Example:
@@ -184,11 +192,19 @@ brave_search(
     search_lang="en",
     context_threshold_mode="balanced",
 )
+brave_search(
+    query="coffee shops",
+    mode="place",
+    location="San Francisco CA United States",
+    count=25,
+    units="metric",
+)
+brave_search(mode="pois", ids=["temporary-poi-id-from-place-result"])
 ```
 
-`mode="both"` makes two Brave calls: normal web search for links, then the dedicated LLM Context endpoint for extracted chunks. If the context call fails, the tool still returns web results and includes `llm_context_error` so the failure is visible. `mode="llm"` and `mode="context"` call only the dedicated context endpoint.
+`mode="both"` makes two Brave calls: normal web search for links, then the dedicated LLM Context endpoint for extracted chunks. If the context call fails, the tool still returns web results and includes `llm_context_error` so the failure is visible. `mode="llm"` and `mode="context"` call only the dedicated context endpoint. Place Search requests use Brave's local endpoint family and are billed separately from normal Web Search.
 
-Context mode uses Brave's agent-facing default depth (`context_count=20`) unless you override it. The standard `limit` option still controls web, news, image, video, and suggestion result counts.
+Context mode uses Brave's agent-facing default depth (`context_count=20`) unless you override it. The standard `limit` option still controls web, news, image, video, and suggestion result counts. Place Search uses `count` for up to 100 place results, and `pois` or `descriptions` use temporary POI IDs returned by Place Search. Brave notes that POI IDs expire after roughly 8 hours.
 
 Optional context controls include:
 
@@ -205,6 +221,17 @@ Optional context controls include:
 - `spellcheck`, `enable_local`, and `enable_source_metadata`: boolean Brave context options
 - `loc_lat`, `loc_long`, `loc_timezone`, `loc_city`, `loc_state`, `loc_state_name`, `loc_country`, and `loc_postal_code`: optional location hints for local recall
 
+Optional place and local controls include:
+
+- `latitude` and `longitude`: coordinate bias for Place Search, provided together
+- `location`: human-readable location bias such as `Cape Town South Africa`
+- `radius`: optional radius bias in metres
+- `count`: Place Search result count, 1 to 100
+- `country`, `search_lang`, `ui_lang`, `units`, `safesearch`, `spellcheck`, and `geoloc`: Brave Place Search request controls; `search_lang`, `ui_lang`, and `units` also apply to `pois`
+- `ids`: one POI ID or a list of up to 20 POI IDs for `pois` and `descriptions`; `descriptions` sends only `ids`
+
+Place Search responses normalise Brave's POI `results` plus geographic buckets such as `cities`, `countries`, `regions`, `neighborhoods`, `addresses`, `streets`, `mixed`, and the resolved `location`.
+
 The client uses GET for simple context calls and POST for advanced context calls with filters, Goggles, local recall, metadata, or location headers. Transient Brave failures such as timeouts, rate limits, and 5xx responses are retried with a small bounded retry budget.
 
 ## Architecture
@@ -219,6 +246,7 @@ flowchart TB
   Brave --> Client
   Client --> API[Brave Search Pro API]
   Client --> Context[Brave LLM Context API]
+  Client --> Local[Brave Place Search API]
   Agent --> Extract[web_extract]
   Extract --> Tavily[web-tavily backend]
 ```

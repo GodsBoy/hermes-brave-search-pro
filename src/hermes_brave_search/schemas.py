@@ -8,15 +8,19 @@ BRAVE_SEARCH_SCHEMA = {
     "name": "brave_search",
     "description": (
         "Search Brave Search Pro. Use mode='both' for web results plus Brave "
-        "LLM Context API chunks, or choose web, llm/context, images, news, "
-        "videos, discussions, suggest, or raw."
+        "LLM Context API chunks, or choose web, llm/context, place/local, "
+        "pois, descriptions, images, news, videos, discussions, suggest, or raw."
     ),
     "parameters": {
         "type": "object",
         "properties": {
             "query": {
                 "type": "string",
-                "description": "Search query to send to Brave Search Pro.",
+                "description": (
+                    "Search query to send to Brave. Required for web/media/context "
+                    "modes; optional for place/local Explore Mode and unused for "
+                    "pois/descriptions."
+                ),
             },
             "mode": {
                 "type": "string",
@@ -29,7 +33,10 @@ BRAVE_SEARCH_SCHEMA = {
                 "minimum": 1,
                 "maximum": 20,
                 "default": 5,
-                "description": "Maximum web/media result count where supported.",
+                "description": (
+                    "Maximum web/media result count where supported. For place/local "
+                    "modes, use count for values up to 100."
+                ),
             },
             "context_count": {
                 "type": "integer",
@@ -101,6 +108,22 @@ BRAVE_SEARCH_SCHEMA = {
                 "type": "string",
                 "description": "Optional Brave search language preference.",
             },
+            "ui_lang": {
+                "type": "string",
+                "description": (
+                    "Optional UI locale for Brave local/place responses, e.g. en-US."
+                ),
+            },
+            "units": {
+                "type": "string",
+                "enum": ["metric", "imperial"],
+                "description": "Measurement units for Brave local/place results.",
+            },
+            "safesearch": {
+                "type": "string",
+                "enum": ["off", "moderate", "strict"],
+                "description": "Safe search level for Brave Place Search.",
+            },
             "goggles": {
                 "oneOf": [
                     {"type": "string"},
@@ -119,7 +142,9 @@ BRAVE_SEARCH_SCHEMA = {
             },
             "enable_local": {
                 "type": "boolean",
-                "description": "Whether Brave should force local recall.",
+                "description": (
+                    "Whether Brave should force local recall for LLM Context."
+                ),
             },
             "enable_source_metadata": {
                 "type": "boolean",
@@ -127,11 +152,17 @@ BRAVE_SEARCH_SCHEMA = {
             },
             "loc_lat": {
                 "type": "number",
-                "description": "Optional latitude for Brave location-aware context.",
+                "description": (
+                    "Optional latitude for Brave location-aware context or local "
+                    "detail calls."
+                ),
             },
             "loc_long": {
                 "type": "number",
-                "description": "Optional longitude for Brave location-aware context.",
+                "description": (
+                    "Optional longitude for Brave location-aware context or local "
+                    "detail calls."
+                ),
             },
             "loc_timezone": {
                 "type": "string",
@@ -163,7 +194,63 @@ BRAVE_SEARCH_SCHEMA = {
                 "type": "string",
                 "description": "Optional postal code for Brave location headers.",
             },
+            "latitude": {
+                "type": "number",
+                "minimum": -90,
+                "maximum": 90,
+                "description": (
+                    "Latitude for mode='place' or mode='local'. Use with longitude."
+                ),
+            },
+            "longitude": {
+                "type": "number",
+                "minimum": -180,
+                "maximum": 180,
+                "description": (
+                    "Longitude for mode='place' or mode='local'. Use with latitude."
+                ),
+            },
+            "location": {
+                "type": "string",
+                "description": (
+                    "Location string for mode='place' or mode='local', e.g. "
+                    "'san francisco ca united states' or 'tokyo japan'."
+                ),
+            },
+            "radius": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Optional Place Search radius bias in metres.",
+            },
+            "count": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100,
+                "description": "Number of Place Search results to request, 1 to 100.",
+            },
+            "geoloc": {
+                "type": "string",
+                "description": (
+                    "Optional Brave geoloc value for Place Search, formatted as "
+                    "latitude x longitude."
+                ),
+            },
+            "ids": {
+                "oneOf": [
+                    {"type": "string"},
+                    {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "minItems": 1,
+                        "maxItems": 20,
+                    },
+                ],
+                "description": (
+                    "Temporary Brave POI id or ids for mode='pois' or "
+                    "mode='descriptions'. POI ids expire after roughly 8 hours."
+                ),
+            },
         },
-        "required": ["query"],
+        "required": [],
     },
 }

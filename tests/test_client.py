@@ -13,6 +13,9 @@ from hermes_brave_search.client import (
 )
 from hermes_brave_search.constants import (
     BRAVE_LLM_CONTEXT_ENDPOINT,
+    BRAVE_LOCAL_DESCRIPTIONS_ENDPOINT,
+    BRAVE_LOCAL_POIS_ENDPOINT,
+    BRAVE_PLACE_SEARCH_ENDPOINT,
     BRAVE_SEARCH_ENDPOINT,
 )
 
@@ -518,4 +521,294 @@ def test_search_rejects_invalid_context_values(monkeypatch):
         "success": False,
         "error": "Unsupported freshness: yesterday",
     }
+    assert called is False
+
+
+def test_place_search_routes_to_local_endpoint(monkeypatch):
+    seen = {}
+
+    def fake_get(url, params, headers, timeout):
+        seen.update({"url": url, "params": params, "headers": headers})
+        return FakeResponse(
+            {
+                "type": "locations",
+                "query": {"original": "coffee shops"},
+                "results": [
+                    {
+                        "type": "location_result",
+                        "id": "loc123",
+                        "title": "Blue Bottle Coffee",
+                        "url": "https://bluebottle.example",
+                        "provider_url": "https://provider.example/blue",
+                        "coordinates": [37.7825, -122.4095],
+                        "postal_address": {"displayAddress": "66 Mint St"},
+                        "rating": {"ratingValue": 4.5, "reviewCount": 1250},
+                        "opening_hours": {"current_day": []},
+                        "distance": {"value": 0.3, "units": "km"},
+                        "categories": ["Coffee & Tea"],
+                    }
+                ],
+                "cities": [],
+                "countries": [],
+                "regions": [],
+                "neighborhoods": [],
+                "addresses": [],
+                "streets": [],
+                "mixed": [{"type": "results", "index": 0, "all": False}],
+                "location": {"coordinates": [37.7749, -122.4194], "country": "US"},
+            }
+        )
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+
+    result = BraveSearchClient(api_key="key").search(
+        "coffee shops",
+        mode="place",
+        latitude=37.7749,
+        longitude=-122.4194,
+        radius=1000,
+        count=99,
+        country="us",
+        search_lang="en",
+        ui_lang="en-US",
+        units="metric",
+        safesearch="strict",
+        spellcheck=True,
+    )
+
+    assert result == {
+        "success": True,
+        "data": {
+            "places": {
+                "query": {"original": "coffee shops"},
+                "results": [
+                    {
+                        "type": "location_result",
+                        "id": "loc123",
+                        "title": "Blue Bottle Coffee",
+                        "url": "https://bluebottle.example",
+                        "provider_url": "https://provider.example/blue",
+                        "coordinates": [37.7825, -122.4095],
+                        "postal_address": {"displayAddress": "66 Mint St"},
+                        "opening_hours": {"current_day": []},
+                        "rating": {"ratingValue": 4.5, "reviewCount": 1250},
+                        "distance": {"value": 0.3, "units": "km"},
+                        "categories": ["Coffee & Tea"],
+                    }
+                ],
+                "cities": [],
+                "countries": [],
+                "regions": [],
+                "neighborhoods": [],
+                "addresses": [],
+                "streets": [],
+                "mixed": [{"type": "results", "index": 0, "all": False}],
+                "location": {"coordinates": [37.7749, -122.4194], "country": "US"},
+            }
+        },
+    }
+    assert seen["url"] == BRAVE_PLACE_SEARCH_ENDPOINT
+    assert seen["params"] == {
+        "q": "coffee shops",
+        "count": 99,
+        "latitude": 37.7749,
+        "longitude": -122.4194,
+        "radius": 1000.0,
+        "country": "US",
+        "search_lang": "en",
+        "ui_lang": "en-us",
+        "units": "metric",
+        "safesearch": "strict",
+        "spellcheck": True,
+    }
+
+
+def test_place_search_supports_explore_mode_without_query(monkeypatch):
+    seen = {}
+
+    def fake_get(url, params, headers, timeout):
+        seen.update({"url": url, "params": params})
+        return FakeResponse({"results": None, "cities": None})
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+
+    result = BraveSearchClient(api_key="key").search(
+        "",
+        mode="local",
+        latitude=40.7128,
+        longitude=-74.0060,
+        radius=2000,
+        limit=10,
+    )
+
+    assert result == {
+        "success": True,
+        "data": {
+            "places": {
+                "query": {},
+                "results": [],
+                "cities": [],
+                "countries": [],
+                "regions": [],
+                "neighborhoods": [],
+                "addresses": [],
+                "streets": [],
+                "mixed": [],
+                "location": {},
+            }
+        },
+    }
+    assert seen["url"] == BRAVE_PLACE_SEARCH_ENDPOINT
+    assert seen["params"] == {
+        "count": 10,
+        "latitude": 40.7128,
+        "longitude": -74.006,
+        "radius": 2000.0,
+    }
+
+
+def test_place_search_treats_none_query_as_explore_mode(monkeypatch):
+    seen = {}
+
+    def fake_get(url, params, headers, timeout):
+        seen.update({"url": url, "params": params})
+        return FakeResponse({"results": []})
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+
+    result = BraveSearchClient(api_key="key").search(
+        None,
+        mode="place",
+        location="cape town south africa",
+        count="bad",
+    )
+
+    assert result["success"] is True
+    assert seen["url"] == BRAVE_PLACE_SEARCH_ENDPOINT
+    assert seen["params"] == {"count": 20, "location": "cape town south africa"}
+
+
+def test_place_search_validates_coordinates_and_radius(monkeypatch):
+    called = False
+
+    def fake_get(*args, **kwargs):
+        nonlocal called
+        called = True
+        return FakeResponse({})
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+
+    result = BraveSearchClient(api_key="key").search(
+        "coffee", mode="place", latitude=37.0
+    )
+
+    assert result == {
+        "success": False,
+        "error": "latitude and longitude must be provided together",
+    }
+    result = BraveSearchClient(api_key="key").search(
+        "coffee", mode="place", location="cape town", radius=-1
+    )
+    assert result == {"success": False, "error": "Unsupported radius: -1"}
+    result = BraveSearchClient(api_key="key").search(
+        "coffee", mode="place", location="cape town", radius="nan"
+    )
+    assert result == {"success": False, "error": "Unsupported radius: nan"}
+    assert called is False
+
+
+def test_place_search_accepts_location_string(monkeypatch):
+    seen = {}
+
+    def fake_get(url, params, headers, timeout):
+        seen.update({"url": url, "params": params})
+        return FakeResponse({"results": []})
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+
+    result = BraveSearchClient(api_key="key").search(
+        "museums", mode="place", location="paris france", count=120
+    )
+
+    assert result["success"] is True
+    assert seen["params"] == {"q": "museums", "count": 100, "location": "paris france"}
+
+
+def test_local_pois_routes_ids_and_headers(monkeypatch):
+    seen = {}
+
+    def fake_get(url, params, headers, timeout):
+        seen.update({"url": url, "params": params, "headers": headers})
+        return FakeResponse({"type": "local_pois", "results": [{"id": "loc123"}]})
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+
+    result = BraveSearchClient(api_key="key").search(
+        "",
+        mode="pois",
+        ids=["loc123", "loc456"],
+        search_lang="en",
+        ui_lang="en-US",
+        units="imperial",
+        loc_lat=37.7,
+        loc_long=-122.4,
+    )
+
+    assert result == {"success": True, "data": {"local_pois": [{"id": "loc123"}]}}
+    assert seen["url"] == BRAVE_LOCAL_POIS_ENDPOINT
+    assert seen["params"] == {
+        "ids": ["loc123", "loc456"],
+        "search_lang": "en",
+        "ui_lang": "en-us",
+        "units": "imperial",
+    }
+    assert seen["headers"]["X-Loc-Lat"] == "37.7"
+    assert seen["headers"]["X-Loc-Long"] == "-122.4"
+
+
+def test_local_descriptions_routes_and_tolerates_dictionary_payload(monkeypatch):
+    seen = {}
+
+    def fake_get(url, params, headers, timeout):
+        seen.update({"url": url, "params": params})
+        return FakeResponse(
+            {"results": {"loc123": {"id": "loc123", "description": "Open late"}}}
+        )
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+
+    result = BraveSearchClient(api_key="key").search(
+        "",
+        mode="descriptions",
+        ids="loc123",
+        search_lang="en",
+        ui_lang="en-US",
+        units="metric",
+    )
+
+    assert result == {
+        "success": True,
+        "data": {"local_descriptions": [{"id": "loc123", "description": "Open late"}]},
+    }
+    assert seen["url"] == BRAVE_LOCAL_DESCRIPTIONS_ENDPOINT
+    assert seen["params"] == {"ids": ["loc123"]}
+
+
+def test_local_id_modes_reject_missing_or_too_many_ids(monkeypatch):
+    called = False
+
+    def fake_get(*args, **kwargs):
+        nonlocal called
+        called = True
+        return FakeResponse({})
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+
+    assert BraveSearchClient(api_key="key").search("", mode="pois") == {
+        "success": False,
+        "error": "ids are required",
+    }
+    assert BraveSearchClient(api_key="key").search(
+        "", mode="descriptions", ids=[str(i) for i in range(21)]
+    ) == {"success": False, "error": "ids supports at most 20 values"}
     assert called is False
