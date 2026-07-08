@@ -20,6 +20,10 @@ def test_schema_lists_all_supported_modes():
         "videos",
         "discussions",
         "suggest",
+        "place",
+        "local",
+        "pois",
+        "descriptions",
         "raw",
     }
 
@@ -35,9 +39,7 @@ def test_tool_routes_to_client(monkeypatch):
     calls = {}
 
     def fake_search(self, query, mode="both", limit=5, **kwargs):
-        calls.update(
-            {"query": query, "mode": mode, "limit": limit, "kwargs": kwargs}
-        )
+        calls.update({"query": query, "mode": mode, "limit": limit, "kwargs": kwargs})
         return {"success": True, "data": {"web": []}}
 
     monkeypatch.setattr(
@@ -76,6 +78,16 @@ def test_tool_routes_to_client(monkeypatch):
             "loc_state_name": None,
             "loc_country": None,
             "loc_postal_code": None,
+            "latitude": None,
+            "longitude": None,
+            "location": None,
+            "radius": None,
+            "count": None,
+            "ui_lang": None,
+            "units": None,
+            "safesearch": None,
+            "geoloc": None,
+            "ids": None,
         },
     }
 
@@ -84,9 +96,7 @@ def test_tool_defaults_to_both_mode(monkeypatch):
     calls = {}
 
     def fake_search(self, query, mode="both", limit=5, **kwargs):
-        calls.update(
-            {"query": query, "mode": mode, "limit": limit, "kwargs": kwargs}
-        )
+        calls.update({"query": query, "mode": mode, "limit": limit, "kwargs": kwargs})
         return {"success": True, "data": {"web": [], "llm_context": []}}
 
     monkeypatch.setattr(
@@ -99,7 +109,7 @@ def test_tool_defaults_to_both_mode(monkeypatch):
     assert calls == {
         "query": "Hermes Agent",
         "mode": "both",
-        "limit": 5,
+        "limit": None,
         "kwargs": {
             "context_count": None,
             "max_tokens": None,
@@ -123,6 +133,16 @@ def test_tool_defaults_to_both_mode(monkeypatch):
             "loc_state_name": None,
             "loc_country": None,
             "loc_postal_code": None,
+            "latitude": None,
+            "longitude": None,
+            "location": None,
+            "radius": None,
+            "count": None,
+            "ui_lang": None,
+            "units": None,
+            "safesearch": None,
+            "geoloc": None,
+            "ids": None,
         },
     }
 
@@ -131,9 +151,7 @@ def test_tool_passes_context_options_to_client(monkeypatch):
     calls = {}
 
     def fake_search(self, query, mode="both", limit=5, **kwargs):
-        calls.update(
-            {"query": query, "mode": mode, "limit": limit, "kwargs": kwargs}
-        )
+        calls.update({"query": query, "mode": mode, "limit": limit, "kwargs": kwargs})
         return {"success": True, "data": {"llm_context": []}}
 
     monkeypatch.setattr(
@@ -194,6 +212,16 @@ def test_tool_passes_context_options_to_client(monkeypatch):
             "loc_state_name": None,
             "loc_country": "ZA",
             "loc_postal_code": None,
+            "latitude": None,
+            "longitude": None,
+            "location": None,
+            "radius": None,
+            "count": None,
+            "ui_lang": None,
+            "units": None,
+            "safesearch": None,
+            "geoloc": None,
+            "ids": None,
         },
     }
 
@@ -218,6 +246,64 @@ def test_schema_lists_context_controls():
         "enable_source_metadata",
         "loc_city",
         "loc_country",
+        "latitude",
+        "longitude",
+        "location",
+        "radius",
+        "count",
+        "ui_lang",
+        "units",
+        "safesearch",
+        "geoloc",
+        "ids",
     }:
         assert key in props
     assert "context_count" in props["max_urls"]["description"]
+    assert props["count"]["maximum"] == 100
+
+
+def test_tool_passes_place_options_to_client(monkeypatch):
+    calls = {}
+
+    def fake_search(self, query, mode="both", limit=5, **kwargs):
+        calls.update({"query": query, "mode": mode, "limit": limit, "kwargs": kwargs})
+        return {"success": True, "data": {"places": {"results": []}}}
+
+    monkeypatch.setattr(
+        "hermes_brave_search.client.BraveSearchClient.search", fake_search
+    )
+
+    payload = json.loads(
+        brave_search_tool(
+            {
+                "query": "coffee shops",
+                "mode": "place",
+                "latitude": 37.7749,
+                "longitude": -122.4194,
+                "location": "san francisco ca united states",
+                "radius": 1000,
+                "count": 50,
+                "country": "US",
+                "search_lang": "en",
+                "ui_lang": "en-US",
+                "units": "metric",
+                "safesearch": "moderate",
+                "geoloc": "37.7749,-122.4194",
+                "ids": ["loc123"],
+            }
+        )
+    )
+
+    assert payload == {"success": True, "data": {"places": {"results": []}}}
+    assert calls["query"] == "coffee shops"
+    assert calls["mode"] == "place"
+    assert calls["kwargs"]["latitude"] == 37.7749
+    assert calls["kwargs"]["longitude"] == -122.4194
+    assert calls["kwargs"]["location"] == "san francisco ca united states"
+    assert calls["kwargs"]["radius"] == 1000
+    assert calls["kwargs"]["count"] == 50
+    assert calls["kwargs"]["ui_lang"] == "en-US"
+    assert calls["kwargs"]["units"] == "metric"
+    assert calls["kwargs"]["safesearch"] == "moderate"
+    assert calls["kwargs"]["geoloc"] == "37.7749,-122.4194"
+    assert calls["kwargs"]["ids"] == ["loc123"]

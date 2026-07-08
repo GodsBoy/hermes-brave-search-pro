@@ -14,7 +14,7 @@ def brave_search_tool(params: dict[str, Any], **kwargs: Any) -> str:
     del kwargs
     query = str(params.get("query") or "").strip()
     mode = str(params.get("mode") or "both").strip().lower()
-    limit = params.get("limit", 5)
+    limit = params.get("limit")
 
     if mode not in BRAVE_SEARCH_MODES:
         return json.dumps(
@@ -49,5 +49,15 @@ def brave_search_tool(params: dict[str, Any], **kwargs: Any) -> str:
         loc_state_name=params.get("loc_state_name"),
         loc_country=params.get("loc_country"),
         loc_postal_code=params.get("loc_postal_code"),
+        latitude=params.get("latitude"),
+        longitude=params.get("longitude"),
+        location=params.get("location"),
+        radius=params.get("radius"),
+        count=params.get("count"),
+        ui_lang=params.get("ui_lang"),
+        units=params.get("units"),
+        safesearch=params.get("safesearch"),
+        geoloc=params.get("geoloc"),
+        ids=params.get("ids"),
     )
     return json.dumps(result, ensure_ascii=False)

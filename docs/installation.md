@@ -129,7 +129,7 @@ With this setup:
 
 - `web_search` uses Brave Search Pro.
 - `web_extract` keeps using Tavily.
-- `brave_search` remains available for richer Brave modes, including Brave's dedicated LLM Context API through `mode="llm"` or `mode="context"`.
+- `brave_search` remains available for richer Brave modes, including Brave's dedicated LLM Context API through `mode="llm"` or `mode="context"`, and Brave Place Search API modes through `mode="place"`, `mode="local"`, `mode="pois"`, or `mode="descriptions"`.
 
 Restart the gateway after installing or changing plugin configuration:
 
@@ -150,6 +150,10 @@ The explicit `brave_search` tool supports:
 - `videos`: Brave video search
 - `discussions`: discussion-focused web results
 - `suggest`: query suggestions
+- `place`: Brave Place Search through `/res/v1/local/place_search`
+- `local`: alias for `place`, including Explore Mode when no query is supplied
+- `pois`: follow-up POI details from `/res/v1/local/pois`
+- `descriptions`: follow-up POI descriptions from `/res/v1/local/descriptions`
 - `raw`: raw Brave API payload
 
 Context mode supports advanced Brave retrieval controls:
@@ -169,7 +173,20 @@ brave_search(
 )
 ```
 
-Use `context_count` for LLM Context depth. The normal `limit` option still controls web, news, image, video, and suggestion result counts. Tavily remains the recommended `web_extract` backend because Brave Search Pro is search and context only in Hermes.
+Use `context_count` for LLM Context depth. The normal `limit` option still controls web, news, image, video, and suggestion result counts. Place Search uses `count` for up to 100 results, and `pois` or `descriptions` use temporary POI IDs returned by Place Search. Brave bills Place Search requests separately from Web Search. Tavily remains the recommended `web_extract` backend because Brave Search Pro is search and context only in Hermes.
+
+Place Search example:
+
+```python
+brave_search(
+    query="coffee shops",
+    mode="place",
+    location="Cape Town South Africa",
+    count=25,
+    units="metric",
+)
+brave_search(mode="descriptions", ids=["temporary-poi-id-from-place-result"])
+```
 
 ## Development checkout
 
