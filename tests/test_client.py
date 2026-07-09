@@ -570,7 +570,7 @@ def test_place_search_routes_to_local_endpoint(monkeypatch):
         count=99,
         country="us",
         search_lang="en",
-        ui_lang="en-US",
+        ui_lang="en-us",
         units="metric",
         safesearch="strict",
         spellcheck=True,
@@ -616,7 +616,7 @@ def test_place_search_routes_to_local_endpoint(monkeypatch):
         "radius": 1000.0,
         "country": "US",
         "search_lang": "en",
-        "ui_lang": "en-us",
+        "ui_lang": "en-US",
         "units": "metric",
         "safesearch": "strict",
         "spellcheck": True,
@@ -759,7 +759,7 @@ def test_local_pois_routes_ids_and_headers(monkeypatch):
     assert seen["params"] == {
         "ids": ["loc123", "loc456"],
         "search_lang": "en",
-        "ui_lang": "en-us",
+        "ui_lang": "en-US",
         "units": "imperial",
     }
     assert seen["headers"]["X-Loc-Lat"] == "37.7"
