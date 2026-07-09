@@ -962,6 +962,22 @@ def normalise_search_lang(value: str | None) -> str | None:
     return None
 
 
+def normalise_ui_lang(value: str | None) -> str | None:
+    """Return a Brave UI locale while preserving the region's required casing."""
+
+    if value is None:
+        return None
+    parsed = str(value).strip()
+    if not parsed:
+        return None
+    parts = parsed.split("-")
+    if len(parts) == 2 and all(parts):
+        parsed = f"{parts[0].lower()}-{parts[1].upper()}"
+    if SEARCH_LANG_RE.match(parsed):
+        return parsed
+    return None
+
+
 def normalise_float(value: Any) -> float | None:
     """Return a float for numeric API parameters."""
 
@@ -1023,7 +1039,7 @@ def normalise_local_locale_options(
     if normalized_search_lang:
         params["search_lang"] = normalized_search_lang
 
-    normalized_ui_lang = normalise_search_lang(ui_lang)
+    normalized_ui_lang = normalise_ui_lang(ui_lang)
     if ui_lang and normalized_ui_lang is None:
         return {"success": False, "error": f"Unsupported ui_lang: {ui_lang}"}
     if normalized_ui_lang:
