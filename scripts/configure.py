@@ -6,11 +6,28 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-src = Path(__file__).resolve().parents[1] / "src"
-if str(src) not in sys.path:
-    sys.path.insert(0, str(src))
+scripts = Path(__file__).absolute().parent
+if str(scripts) not in sys.path:
+    sys.path.insert(0, str(scripts))
 
-from hermes_brave_search.configure import main  # noqa: E402
+from doctor import (  # noqa: E402
+    _reexec_with_hermes_python,
+    _set_installed_hermes_home,
+)
+
+
+def _run() -> int:
+    _set_installed_hermes_home()
+    _reexec_with_hermes_python()
+
+    src = scripts.parent / "src"
+    if str(src) not in sys.path:
+        sys.path.insert(0, str(src))
+
+    from hermes_brave_search.configure import main
+
+    return main()
+
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(_run())

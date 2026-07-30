@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 import hermes_brave_search
 from hermes_brave_search.provider import BraveProSearchProvider
 
@@ -8,12 +10,21 @@ class FakeContext:
     def __init__(self):
         self.web_providers = []
         self.tools = []
+        self.events = []
 
     def register_web_search_provider(self, provider):
+        self.events.append(("provider", provider.name))
         self.web_providers.append(provider)
 
     def register_tool(self, **kwargs):
+        self.events.append(("tool", kwargs["name"]))
         self.tools.append(kwargs)
+
+
+class RejectingContext(FakeContext):
+    def register_tool(self, **kwargs):
+        self.events.append(("tool", kwargs["name"]))
+        raise PermissionError("tool override denied")
 
 
 def test_register_adds_provider_and_tool():
@@ -30,6 +41,18 @@ def test_register_adds_provider_and_tool():
     assert ctx.tools[0]["emoji"] == "🦁"
     assert ctx.tools[0]["override"] is True
     assert callable(ctx.tools[0]["check_fn"])
+    assert ctx.events == [("tool", "brave_search"), ("provider", "brave-pro")]
+
+
+def test_register_does_not_add_provider_when_tool_override_is_denied():
+    ctx = RejectingContext()
+
+    with pytest.raises(PermissionError, match="tool override denied"):
+        hermes_brave_search.register(ctx)
+
+    assert ctx.events == [("tool", "brave_search")]
+    assert ctx.tools == []
+    assert ctx.web_providers == []
 
 
 def test_provider_availability_uses_brave_key(monkeypatch):

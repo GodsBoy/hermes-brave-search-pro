@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 
-from .compat import ensure_recommended_web_config, patch_tools_config_picker
+from .compat import apply_runtime_compat
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -21,15 +21,16 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    changed = ensure_recommended_web_config(force=args.force)
+    report = apply_runtime_compat(force=args.force)
 
-    if changed:
-        print("Updated Hermes config: " + ", ".join(changed))
+    if report.errors:
+        for error in report.errors:
+            print(f"Error: {error}")
+        return 1
+    if report.config_changed:
+        print("Updated Hermes config: " + ", ".join(report.config_changed))
     else:
         print("Hermes Brave Search Pro config already looks correct.")
-
-    if patch_tools_config_picker():
-        print("Applied Brave Pro provider-picker compatibility shim for this process.")
 
     return 0
 

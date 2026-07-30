@@ -3,10 +3,9 @@ from __future__ import annotations
 import importlib.util
 import subprocess
 import sys
+import tomllib
 from importlib.metadata import entry_points
 from pathlib import Path
-
-import tomllib
 
 
 def test_plugin_import_does_not_import_httpx():
@@ -46,12 +45,31 @@ def test_directory_plugin_shim_exposes_register():
     assert callable(module.register)
 
 
-def test_package_and_plugin_versions_match():
+def test_release_metadata_is_aligned():
     root = Path(__file__).resolve().parents[1]
     pyproject = tomllib.loads((root / "pyproject.toml").read_text())
-    package_version = pyproject["project"]["version"]
+    lockfile = tomllib.loads((root / "uv.lock").read_text())
+    project = pyproject["project"]
+    package_version = project["version"]
+    classifiers = set(project["classifiers"])
+    locked_package = next(
+        package
+        for package in lockfile["package"]
+        if package["name"] == project["name"]
+    )
 
+    assert package_version == "0.1.8"
     assert f"version: {package_version}\n" in (root / "plugin.yaml").read_text()
+    assert locked_package["version"] == package_version
+    assert project["requires-python"] == ">=3.11,<3.14"
+    assert lockfile["requires-python"] == ">=3.11, <3.14"
+    assert pyproject["tool"]["ruff"]["target-version"] == "py311"
+    assert "Programming Language :: Python :: 3.10" not in classifiers
+    assert {
+        "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
+        "Programming Language :: Python :: 3.13",
+    } <= classifiers
 
 
 def test_plugin_manifest_only_requires_brave_key():

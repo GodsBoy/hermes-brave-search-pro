@@ -10,7 +10,7 @@
 
 <p align="center">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-F97316.svg"></a>
-  <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-2563EB.svg">
+  <img alt="Python 3.11 to 3.13" src="https://img.shields.io/badge/python-3.11--3.13-2563EB.svg">
   <img alt="Hermes plugin" src="https://img.shields.io/badge/Hermes-plugin-111827.svg">
   <img alt="Brave Search Pro" src="https://img.shields.io/badge/Brave-Search%20Pro-FF5A1F.svg">
 </p>
@@ -28,12 +28,12 @@ Hermes already separates search from extraction. This plugin leans into that des
 - **Query context:** `brave_search(mode="llm")` and `brave_search(mode="context")` call Brave's dedicated `/res/v1/llm/context` endpoint.
 - **Place search:** `brave_search(mode="place")` and `brave_search(mode="local")` call Brave's `/res/v1/local/place_search` endpoint, with follow-up POI detail modes for `/pois` and `/descriptions`.
 - **Advanced search:** `brave_search` exposes Brave modes that do not fit the standard `web_search` contract.
-- **No source patching:** install the plugin, let its compatibility shim configure safe defaults, and keep updating Hermes normally.
+- **Hermes-owned provider picker:** current Hermes owns provider visibility, and the plugin applies safe explicit backend defaults for Brave Pro.
 
 ## Features
 
 - Hermes web-search provider named `brave-pro`
-- Runtime compatibility shim that safely prefers Brave Pro over Brave Free when both share the same Brave API key
+- Safe runtime defaults that prefer Brave Pro over Brave Free when both share the same Brave API key
 - Advanced Hermes tool named `brave_search`
 - Dedicated Brave LLM Context API support for query-to-context chunks
 - Context controls for freshness, country, language, Goggles, local recall, source metadata, snippets, and token budgets
@@ -49,8 +49,12 @@ Hermes already separates search from extraction. This plugin leans into that des
 Canonical Hermes install:
 
 ```bash
-hermes plugins install GodsBoy/hermes-brave-search-pro --enable
+hermes plugins install GodsBoy/hermes-brave-search-pro --no-enable
+hermes plugins enable brave-search --allow-tool-override
+hermes gateway restart
 ```
+
+The plugin intentionally overrides Hermes' built-in `brave_search` tool, so install it disabled, grant the explicit override permission, and restart the gateway before using it.
 
 During install, Hermes prompts for the plugin's required credential:
 
@@ -132,6 +136,9 @@ plugins:
   enabled:
     - brave-search
     - web-tavily  # optional, only needed for Tavily web_extract
+  entries:
+    brave-search:
+      allow_tool_override: true
 
 web:
   backend: "brave-pro"
@@ -272,7 +279,9 @@ src/hermes_brave_search/
 Canonical Hermes install:
 
 ```bash
-hermes plugins install GodsBoy/hermes-brave-search-pro --enable
+hermes plugins install GodsBoy/hermes-brave-search-pro --no-enable
+hermes plugins enable brave-search --allow-tool-override
+hermes gateway restart
 ```
 
 Update an existing install:
@@ -286,7 +295,8 @@ Direct user-plugin install:
 ```bash
 git clone https://github.com/GodsBoy/hermes-brave-search-pro.git \
   ~/.hermes/plugins/brave-search
-hermes plugins enable brave-search
+hermes plugins enable brave-search --allow-tool-override
+hermes gateway restart
 ```
 
 Profile-specific install:
@@ -294,15 +304,23 @@ Profile-specific install:
 ```bash
 git clone https://github.com/GodsBoy/hermes-brave-search-pro.git \
   ~/.hermes/profiles/myprofile/plugins/brave-search
-hermes --profile myprofile plugins enable brave-search
+hermes --profile myprofile plugins enable brave-search --allow-tool-override
+hermes --profile myprofile gateway restart
+python ~/.hermes/profiles/myprofile/plugins/brave-search/scripts/doctor.py
 ```
 
 From an existing checkout, install a symlink:
 
 ```bash
 ./scripts/install.sh
+hermes plugins enable brave-search --allow-tool-override
+hermes gateway restart
+
 # Optional profile-aware install
 HERMES_PROFILE=myprofile ./scripts/install.sh
+hermes --profile myprofile plugins enable brave-search --allow-tool-override
+hermes --profile myprofile gateway restart
+python ~/.hermes/profiles/myprofile/plugins/brave-search/scripts/doctor.py
 ```
 
 For development only:
@@ -335,7 +353,8 @@ It checks:
 - `web.backend`
 - `web.search_backend`
 - `web.extract_backend`
-- the runtime compatibility shim that keeps Brave Pro selected when Brave Free shares the same API key
+- the safe runtime defaults that select Brave Pro when Brave Free shares the same API key
+- whether `brave-search` is enabled with built-in tool override permission
 
 After adding missing keys, ask the doctor to apply safe provider defaults:
 
@@ -354,7 +373,8 @@ python ~/.hermes/plugins/brave-search/scripts/doctor.py --fix --force
 Check that the plugin is enabled and Hermes was restarted after installation:
 
 ```bash
-hermes plugins enable brave-search
+hermes plugins enable brave-search --allow-tool-override
+hermes gateway restart
 ```
 
 Then confirm your config uses the provider name exactly:
@@ -385,6 +405,9 @@ plugins:
   enabled:
     - brave-search
     - web-tavily
+  entries:
+    brave-search:
+      allow_tool_override: true
 
 web:
   backend: "brave-pro"
