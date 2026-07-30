@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import importlib.util
 import os
 import re
 import shlex
@@ -126,8 +125,6 @@ def _set_installed_hermes_home() -> None:
 
 
 def _reexec_with_hermes_python() -> None:
-    if importlib.util.find_spec("hermes_cli") is not None:
-        return
     python = _hermes_python()
     if not python:
         return

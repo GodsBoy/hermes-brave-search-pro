@@ -222,7 +222,6 @@ def test_reexec_uses_resolved_polyglot_interpreter(doctor, monkeypatch, tmp_path
     launcher = tmp_path / "hermes"
     launcher.symlink_to(real_launcher)
     monkeypatch.setenv("PATH", str(tmp_path))
-    monkeypatch.setattr(doctor.importlib.util, "find_spec", lambda name: None)
     monkeypatch.setattr(doctor.sys, "argv", [str(SCRIPT), "--fix"])
     calls = []
     monkeypatch.setattr(
@@ -237,9 +236,30 @@ def test_reexec_uses_resolved_polyglot_interpreter(doctor, monkeypatch, tmp_path
     assert calls == [(expected, [expected, str(SCRIPT), "--fix"])]
 
 
+def test_reexec_uses_launcher_environment_when_other_hermes_is_importable(
+    doctor,
+    monkeypatch,
+    tmp_path,
+):
+    interpreter = _python_link(tmp_path / "python3")
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name: object())
+    monkeypatch.setattr(doctor, "_hermes_python", lambda: str(interpreter))
+    calls = []
+    monkeypatch.setattr(
+        doctor.os,
+        "execv",
+        lambda path, arguments: calls.append((path, arguments)),
+    )
+
+    doctor._reexec_with_hermes_python()
+
+    assert calls == [
+        (str(interpreter), [str(interpreter), *doctor.sys.argv]),
+    ]
+
+
 def test_reexec_ignores_unusable_interpreter(doctor, monkeypatch, tmp_path):
     interpreter = _launcher(tmp_path / "python3", "not a Python executable\n")
-    monkeypatch.setattr(doctor.importlib.util, "find_spec", lambda name: None)
     monkeypatch.setattr(doctor, "_hermes_python", lambda: str(interpreter))
     monkeypatch.setattr(
         doctor.os,
@@ -252,7 +272,6 @@ def test_reexec_ignores_unusable_interpreter(doctor, monkeypatch, tmp_path):
 
 def test_reexec_does_not_skip_virtualenv_symlink(doctor, monkeypatch, tmp_path):
     interpreter = _python_link(tmp_path / "python3")
-    monkeypatch.setattr(doctor.importlib.util, "find_spec", lambda name: None)
     monkeypatch.setattr(doctor, "_hermes_python", lambda: str(interpreter))
     calls = []
     monkeypatch.setattr(
@@ -269,7 +288,6 @@ def test_reexec_does_not_skip_virtualenv_symlink(doctor, monkeypatch, tmp_path):
 
 
 def test_reexec_does_not_loop_on_current_interpreter(doctor, monkeypatch):
-    monkeypatch.setattr(doctor.importlib.util, "find_spec", lambda name: None)
     monkeypatch.setattr(doctor, "_hermes_python", lambda: sys.executable)
     monkeypatch.setattr(
         doctor.os,
