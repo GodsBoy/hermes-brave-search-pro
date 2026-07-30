@@ -77,3 +77,16 @@ def test_plugin_manifest_only_requires_brave_key():
 
     assert "BRAVE_SEARCH_API_KEY" in plugin_manifest
     assert "TAVILY_API_KEY" not in plugin_manifest
+
+
+def test_ci_installs_current_hermes_editably():
+    workflow = (
+        Path(__file__).resolve().parents[1] / ".github" / "workflows" / "ci.yml"
+    ).read_text()
+
+    assert "git clone --depth 1" in workflow
+    assert 'uv pip install -e "$RUNNER_TEMP/hermes-agent"' in workflow
+    wheel_install = (
+        "uv pip install 'git+https://github.com/NousResearch/hermes-agent.git'"
+    )
+    assert wheel_install not in workflow

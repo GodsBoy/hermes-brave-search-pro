@@ -46,6 +46,9 @@ jobs:
         run: |
           uv venv --python "3.12"
           uv pip install -e '.[dev]'
-          uv pip install 'git+https://github.com/NousResearch/hermes-agent.git'
+          git clone --depth 1 \
+            https://github.com/NousResearch/hermes-agent.git \
+            "$RUNNER_TEMP/hermes-agent"
+          uv pip install -e "$RUNNER_TEMP/hermes-agent"
       - name: Test PluginManager integration
         run: uv run pytest tests/test_hermes_plugin_manager.py
