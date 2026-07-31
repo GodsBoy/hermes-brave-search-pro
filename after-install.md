@@ -2,12 +2,24 @@
 
 This plugin works best with Brave for search. Tavily extraction is optional and uses Hermes' separate bundled `web-tavily` plugin.
 
-Enable the plugin with its intentional built-in tool override permission, then restart the gateway:
+Install the separate Desktop surface, enable the backend with its intentional built-in tool override permission, then restart the gateway:
 
 ```bash
+~/.hermes/plugins/brave-search/scripts/install-desktop.sh
 hermes plugins enable brave-search --allow-tool-override
 hermes gateway restart
 ```
+
+## Desktop Brave Search
+
+The Desktop page is a separate plugin and stays disabled until you enable it in
+Hermes Desktop Settings.
+
+Brave Desktop search needs only `BRAVE_SEARCH_API_KEY`. Tavily remains an
+optional, separate extraction integration. The Desktop surface uses the active
+profile, so switched or remote backends need their own deployed, enabled Python
+plugin and restarted gateway. Desktop loading does not automatically import a
+project Python plugin into that gateway.
 
 The `brave_search` tool also supports Brave's dedicated LLM Context API and Brave Place Search API. Use `mode="llm"` or `mode="context"` for query-to-context chunks, `mode="both"` for Brave web results plus those context chunks, `mode="place"` or `mode="local"` for Place Search, and `mode="pois"` or `mode="descriptions"` for follow-up POI details.
 
