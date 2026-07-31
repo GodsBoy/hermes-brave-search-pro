@@ -1,0 +1,14 @@
+{
+  "name": "brave-search",
+  "label": "Brave Search",
+  "description": "Backend API for the Hermes Desktop Brave Search page.",
+  "icon": "Search",
+  "version": "0.1.8",
+  "tab": {
+    "path": "/brave-search",
+    "hidden": true
+  },
+  "slots": [],
+  "entry": "dist/index.js",
+  "api": "plugin_api.py"
+}

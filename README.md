@@ -50,11 +50,12 @@ Canonical Hermes install:
 
 ```bash
 hermes plugins install GodsBoy/hermes-brave-search-pro --no-enable
+~/.hermes/plugins/brave-search/scripts/install-desktop.sh
 hermes plugins enable brave-search --allow-tool-override
 hermes gateway restart
 ```
 
-The plugin intentionally overrides Hermes' built-in `brave_search` tool, so install it disabled, grant the explicit override permission, and restart the gateway before using it.
+The plugin intentionally overrides Hermes' built-in `brave_search` tool, so install it disabled, install the separate Desktop surface, grant the explicit override permission, and restart the gateway before using it. After the restart, open Hermes Desktop Settings and enable Brave Search.
 
 During install, Hermes prompts for the plugin's required credential:
 
@@ -280,6 +281,7 @@ Canonical Hermes install:
 
 ```bash
 hermes plugins install GodsBoy/hermes-brave-search-pro --no-enable
+~/.hermes/plugins/brave-search/scripts/install-desktop.sh
 hermes plugins enable brave-search --allow-tool-override
 hermes gateway restart
 ```
@@ -295,6 +297,7 @@ Direct user-plugin install:
 ```bash
 git clone https://github.com/GodsBoy/hermes-brave-search-pro.git \
   ~/.hermes/plugins/brave-search
+~/.hermes/plugins/brave-search/scripts/install-desktop.sh
 hermes plugins enable brave-search --allow-tool-override
 hermes gateway restart
 ```
@@ -304,6 +307,8 @@ Profile-specific install:
 ```bash
 git clone https://github.com/GodsBoy/hermes-brave-search-pro.git \
   ~/.hermes/profiles/myprofile/plugins/brave-search
+HERMES_PROFILE=myprofile \
+  ~/.hermes/profiles/myprofile/plugins/brave-search/scripts/install-desktop.sh
 hermes --profile myprofile plugins enable brave-search --allow-tool-override
 hermes --profile myprofile gateway restart
 python ~/.hermes/profiles/myprofile/plugins/brave-search/scripts/doctor.py
@@ -322,6 +327,11 @@ hermes --profile myprofile plugins enable brave-search --allow-tool-override
 hermes --profile myprofile gateway restart
 python ~/.hermes/profiles/myprofile/plugins/brave-search/scripts/doctor.py
 ```
+
+`./scripts/install.sh` installs both profile-scoped links. It checks both
+destinations before creating either link, and refuses to replace an existing
+file, directory, or different symlink. After the gateway restarts, enable Brave
+Search in Hermes Desktop Settings.
 
 For development only:
 
@@ -416,6 +426,23 @@ web:
 ```
 
 Do not rely on `web.backend` for this pairing because that single fallback applies to both capabilities.
+
+## Desktop Brave Search
+
+The Desktop page is a separate, disabled-by-default plugin. Its files live in
+the selected local profile at `desktop-plugins/brave-search`, while the Python
+backend lives at `plugins/brave-search`. Install the backend or checkout first,
+install the Desktop surface, enable the backend with `--allow-tool-override`,
+restart the gateway, then enable Brave Search in Hermes Desktop Settings.
+
+Desktop uses the active profile's plugin API. Switching profiles can therefore
+show an unavailable backend until that profile has its own enabled backend,
+Brave credential, and gateway restart. For a remote backend, deploy and enable
+the Python plugin on the remote active profile separately; installing the local
+Desktop surface does not copy it there. Loading a Desktop plugin does not automatically import a project Python plugin into the gateway.
+
+Brave Desktop search requires only `BRAVE_SEARCH_API_KEY`. Tavily remains an
+optional, separate extraction integration.
 
 ## License
 

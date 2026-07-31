@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -12,6 +13,7 @@ DOC_PATHS = (
     ROOT / "after-install.md",
     ROOT / "examples" / "config.yaml",
     ROOT / "scripts" / "install.sh",
+    ROOT / "scripts" / "install-desktop.sh",
 )
 
 
@@ -33,6 +35,7 @@ def test_fresh_install_guidance_grants_override_before_restart() -> None:
         assert_in_order(
             text,
             "hermes plugins install GodsBoy/hermes-brave-search-pro --no-enable",
+            "scripts/install-desktop.sh",
             "hermes plugins enable brave-search --allow-tool-override",
             "hermes gateway restart",
         )
@@ -45,12 +48,17 @@ def test_direct_and_profile_guidance_grants_override_before_restart() -> None:
             text,
             "git clone https://github.com/GodsBoy/hermes-brave-search-pro.git \\\n"
             "  ~/.hermes/plugins/brave-search",
+            "~/.hermes/plugins/brave-search/scripts/install-desktop.sh",
             "hermes plugins enable brave-search --allow-tool-override",
             "hermes gateway restart",
+        )
+        assert_in_order(
+            text,
             "git clone https://github.com/GodsBoy/hermes-brave-search-pro.git \\\n"
             "  ~/.hermes/profiles/myprofile/plugins/brave-search",
-            "hermes plugins enable brave-search --allow-tool-override",
-            "hermes gateway restart",
+            "HERMES_PROFILE=myprofile \\\n"
+            "  ~/.hermes/profiles/myprofile/plugins/brave-search/"
+            "scripts/install-desktop.sh",
             "hermes --profile myprofile plugins enable "
             "brave-search --allow-tool-override",
             "hermes --profile myprofile gateway restart",
@@ -102,22 +110,76 @@ def test_after_install_does_not_claim_private_picker_patching() -> None:
     assert re.search(r"\bpatch(?:ed|ing)?\b", text, re.IGNORECASE) is None
 
 
+def test_after_install_includes_matching_default_and_named_profile_flows() -> None:
+    text = read(ROOT / "after-install.md")
+    assert_in_order(
+        text,
+        "HERMES_PROFILE=default",
+        "~/.hermes/plugins/brave-search/scripts/install-desktop.sh",
+        "hermes plugins enable brave-search --allow-tool-override",
+        "hermes gateway restart",
+    )
+    assert_in_order(
+        text,
+        "HERMES_PROFILE=myprofile",
+        "~/.hermes/profiles/myprofile/plugins/brave-search/scripts/install-desktop.sh",
+        "hermes --profile myprofile plugins enable ",
+        "brave-search --allow-tool-override",
+        "hermes --profile myprofile gateway restart",
+    )
+
+
+def test_desktop_guidance_keeps_renderer_and_backend_boundaries_explicit() -> None:
+    for path in (ROOT / "README.md", ROOT / "docs" / "installation.md"):
+        text = read(path)
+        assert "desktop-plugins/brave-search" in text
+        assert "Settings" in text
+        assert "separate" in text.lower()
+        assert "active profile" in text.lower()
+        assert "remote" in text.lower()
+        assert "does not automatically import" in text.lower()
+
+
+def test_desktop_guidance_requires_only_brave_and_keeps_tavily_optional() -> None:
+    for path in (ROOT / "README.md", ROOT / "docs" / "installation.md"):
+        text = read(path)
+        desktop_section = text[text.index("## Desktop Brave Search") :]
+        assert "BRAVE_SEARCH_API_KEY" in desktop_section
+        assert "TAVILY_API_KEY" not in desktop_section
+        assert "optional" in desktop_section.lower()
+
+
 def run_installer(home: Path, *, profile: str | None = None) -> str:
+    return run_script(home, "install.sh", profile=profile)
+
+
+def run_script(
+    home: Path,
+    script_name: str,
+    *,
+    profile: str | None = None,
+    check: bool = True,
+    extra_env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str] | str:
     env = os.environ.copy()
     env["HOME"] = str(home)
     env["HERMES_HOME"] = str(home / ".hermes")
     if profile is not None:
         env["HERMES_PROFILE"] = profile
+    if extra_env is not None:
+        env.update(extra_env)
 
     result = subprocess.run(
-        ["bash", str(ROOT / "scripts" / "install.sh")],
+        ["bash", str(ROOT / "scripts" / script_name)],
         cwd=ROOT,
         env=env,
-        check=True,
+        check=check,
         capture_output=True,
         text=True,
     )
-    return result.stdout
+    if check:
+        return result.stdout
+    return result
 
 
 def test_symlink_installer_prints_default_permission_and_restart_flow(
@@ -129,6 +191,25 @@ def test_symlink_installer_prints_default_permission_and_restart_flow(
     assert "hermes gateway restart" in output
     assert f"backends in {hermes_home / 'config.yaml'}" in output
     assert 'backend: "brave-pro"' in output
+
+
+def test_symlink_installer_links_both_surfaces_and_is_idempotent(
+    tmp_path: Path,
+) -> None:
+    first_output = run_installer(tmp_path)
+    hermes_home = tmp_path / ".hermes"
+    backend_target = hermes_home / "plugins" / "brave-search"
+    desktop_target = hermes_home / "desktop-plugins" / "brave-search"
+
+    assert backend_target.is_symlink()
+    assert backend_target.resolve() == ROOT
+    assert desktop_target.is_symlink()
+    assert desktop_target.resolve() == ROOT / "desktop"
+    assert "Installed:" in first_output
+
+    second_output = run_installer(tmp_path)
+    assert f"Already installed: {backend_target} -> {ROOT}" in second_output
+    assert f"Already installed: {desktop_target} -> {ROOT / 'desktop'}" in second_output
 
 
 def test_symlink_installer_prints_profile_permission_and_restart_flow(
@@ -144,6 +225,18 @@ def test_symlink_installer_prints_profile_permission_and_restart_flow(
     assert f"backends in {profile_home / 'config.yaml'}" in output
     assert f"HERMES_HOME={profile_home}" in output
     assert f"{profile_home / 'plugins/brave-search/scripts/doctor.py'}" in output
+
+
+def test_symlink_installer_links_both_named_profile_surfaces(
+    tmp_path: Path,
+) -> None:
+    run_installer(tmp_path, profile="MyProfile")
+    profile_home = tmp_path / ".hermes" / "profiles" / "myprofile"
+
+    assert (profile_home / "plugins" / "brave-search").resolve() == ROOT
+    assert (profile_home / "desktop-plugins" / "brave-search").resolve() == (
+        ROOT / "desktop"
+    )
 
 
 def test_symlink_installer_maps_default_profile_to_root(tmp_path: Path) -> None:
@@ -176,3 +269,188 @@ def test_symlink_installer_rejects_unsafe_profile_names(tmp_path: Path) -> None:
     assert result.returncode == 1
     assert "Invalid Hermes profile name" in result.stderr
     assert not (tmp_path / "escape").exists()
+
+
+def test_symlink_installer_rejects_reserved_profile_before_linking(
+    tmp_path: Path,
+) -> None:
+    result = run_script(
+        tmp_path,
+        "install.sh",
+        profile="root",
+        check=False,
+    )
+
+    assert isinstance(result, subprocess.CompletedProcess)
+    assert result.returncode == 1
+    assert "Reserved Hermes profile name" in result.stderr
+    assert not (tmp_path / ".hermes" / "plugins" / "brave-search").exists()
+    assert not (
+        tmp_path / ".hermes" / "desktop-plugins" / "brave-search"
+    ).exists()
+
+
+def test_symlink_installer_preflights_both_targets_before_linking(
+    tmp_path: Path,
+) -> None:
+    for target_name in ("plugins", "desktop-plugins"):
+        for conflict_kind in ("file", "directory", "symlink"):
+            case_home = tmp_path / f"{target_name}-{conflict_kind}"
+            hermes_home = case_home / ".hermes"
+            backend_target = hermes_home / "plugins" / "brave-search"
+            desktop_target = hermes_home / "desktop-plugins" / "brave-search"
+            conflict_target = (
+                backend_target if target_name == "plugins" else desktop_target
+            )
+            conflict_target.parent.mkdir(parents=True)
+
+            unrelated = case_home / "unrelated"
+            if conflict_kind == "file":
+                conflict_target.write_text("keep me", encoding="utf-8")
+            elif conflict_kind == "directory":
+                conflict_target.mkdir()
+            else:
+                unrelated.mkdir()
+                conflict_target.symlink_to(unrelated)
+
+            result = run_script(case_home, "install.sh", check=False)
+
+            assert isinstance(result, subprocess.CompletedProcess)
+            assert result.returncode == 1
+            assert "Refusing to overwrite existing plugin path" in result.stderr
+            if conflict_kind == "file":
+                assert conflict_target.read_text(encoding="utf-8") == "keep me"
+            elif conflict_kind == "directory":
+                assert conflict_target.is_dir()
+            else:
+                assert conflict_target.is_symlink()
+                assert conflict_target.resolve() == unrelated
+
+            other_target = (
+                desktop_target
+                if target_name == "plugins"
+                else backend_target
+            )
+            assert not other_target.exists()
+
+
+def test_symlink_installer_refuses_post_preflight_conflict(
+    tmp_path: Path,
+) -> None:
+    hermes_home = tmp_path / ".hermes"
+    backend_target = hermes_home / "plugins" / "brave-search"
+    desktop_target = hermes_home / "desktop-plugins" / "brave-search"
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    mkdir_binary = shutil.which("mkdir")
+    assert mkdir_binary is not None
+    (bin_dir / "mkdir").write_text(
+        "#!/bin/sh\n"
+        f'"{mkdir_binary}" -p "$INSTALL_TEST_RACE_PARENT"\n'
+        'printf "conflict" > "$INSTALL_TEST_RACE_TARGET"\n'
+        f'exec "{mkdir_binary}" "$@"\n',
+        encoding="utf-8",
+    )
+    (bin_dir / "mkdir").chmod(0o755)
+
+    result = run_script(
+        tmp_path,
+        "install.sh",
+        check=False,
+        extra_env={
+            "PATH": f"{bin_dir}:{os.environ['PATH']}",
+            "INSTALL_TEST_RACE_PARENT": str(backend_target.parent),
+            "INSTALL_TEST_RACE_TARGET": str(backend_target),
+        },
+    )
+
+    assert isinstance(result, subprocess.CompletedProcess)
+    assert result.returncode == 1
+    assert "Refusing to overwrite existing plugin path" in result.stderr
+    assert backend_target.read_text(encoding="utf-8") == "conflict"
+    assert not desktop_target.exists()
+
+
+def test_symlink_installer_rolls_back_only_its_first_link_on_second_link_failure(
+    tmp_path: Path,
+) -> None:
+    hermes_home = tmp_path / ".hermes"
+    backend_target = hermes_home / "plugins" / "brave-search"
+    desktop_target = hermes_home / "desktop-plugins" / "brave-search"
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    python_binary = shutil.which("python3") or shutil.which("python")
+    mkdir_binary = shutil.which("mkdir")
+    assert python_binary is not None
+    assert mkdir_binary is not None
+    (bin_dir / "python3").write_text(
+        "#!/bin/sh\n"
+        'if [ "$3" = "$INSTALL_TEST_RACE_TARGET" ]; then\n'
+        f'  "{mkdir_binary}" -p "$INSTALL_TEST_RACE_TARGET"\n'
+        "  exit 1\n"
+        "fi\n"
+        f'exec "{python_binary}" "$@"\n',
+        encoding="utf-8",
+    )
+    (bin_dir / "python3").chmod(0o755)
+
+    result = run_script(
+        tmp_path,
+        "install.sh",
+        check=False,
+        extra_env={
+            "PATH": f"{bin_dir}:{os.environ['PATH']}",
+            "INSTALL_TEST_RACE_TARGET": str(desktop_target),
+        },
+    )
+
+    assert isinstance(result, subprocess.CompletedProcess)
+    assert result.returncode == 1
+    assert "Refusing to overwrite existing plugin path" in result.stderr
+    assert "Rolled back:" in result.stdout
+    assert not backend_target.exists()
+    assert desktop_target.is_dir()
+
+
+def test_standalone_desktop_installer_links_only_desktop_surface(
+    tmp_path: Path,
+) -> None:
+    first_output = run_script(tmp_path, "install-desktop.sh")
+    assert isinstance(first_output, str)
+    hermes_home = tmp_path / ".hermes"
+    desktop_target = hermes_home / "desktop-plugins" / "brave-search"
+
+    assert desktop_target.is_symlink()
+    assert desktop_target.resolve() == ROOT / "desktop"
+    assert not (hermes_home / "plugins" / "brave-search").exists()
+    assert "Settings" in first_output
+
+    second_output = run_script(tmp_path, "install-desktop.sh")
+    assert isinstance(second_output, str)
+    assert f"Already installed: {desktop_target} -> {ROOT / 'desktop'}" in second_output
+
+
+def test_standalone_desktop_installer_normalizes_profile_and_refuses_reserved(
+    tmp_path: Path,
+) -> None:
+    output = run_script(tmp_path, "install-desktop.sh", profile="MyProfile")
+    assert isinstance(output, str)
+    profile_target = (
+        tmp_path
+        / ".hermes"
+        / "profiles"
+        / "myprofile"
+        / "desktop-plugins"
+        / "brave-search"
+    )
+    assert profile_target.resolve() == ROOT / "desktop"
+
+    result = run_script(
+        tmp_path / "reserved",
+        "install-desktop.sh",
+        profile="root",
+        check=False,
+    )
+    assert isinstance(result, subprocess.CompletedProcess)
+    assert result.returncode == 1
+    assert "Reserved Hermes profile name" in result.stderr
