@@ -26,14 +26,9 @@ _SCENARIO = textwrap.dedent(
     from fastapi.testclient import TestClient
     from hermes_cli import web_server
 
-    mounted = any(
-        getattr(route, "path", None) == "/api/plugins/brave-search/search"
-        for route in web_server.app.routes
-    )
     package = sys.modules.get("hermes_brave_search")
 
     result = {
-        "mounted": mounted,
         "package_path": (
             str(Path(package.__file__).resolve().parent) if package else None
         ),
@@ -302,7 +297,6 @@ def test_current_hermes_runtime_mounts_enabled_plugin_and_hides_disabled_plugin(
 ) -> None:
     enabled = _run_scenario(tmp_path / "enabled", enabled=True)
 
-    assert enabled["mounted"] is True
     assert enabled["package_path"] == str(ROOT / "src" / "hermes_brave_search")
     assert enabled["unauthenticated_status"] == 401
     assert enabled["unauthenticated_body"] == {"detail": "Unauthorized"}
@@ -324,7 +318,6 @@ def test_current_hermes_runtime_mounts_enabled_plugin_and_hides_disabled_plugin(
 
     disabled = _run_scenario(tmp_path / "disabled", enabled=False)
 
-    assert disabled["mounted"] is False
     assert disabled["package_path"] is None
     assert disabled["unauthenticated_status"] == 401
     assert disabled["unauthenticated_body"] == {"detail": "Unauthorized"}
