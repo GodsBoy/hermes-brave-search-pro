@@ -74,6 +74,7 @@ def test_desktop_plugin_uses_only_scoped_search_requests_and_bounds_queries():
 def test_desktop_plugin_has_accessible_validation_and_async_status_contract():
     source = plugin_source()
 
+    assert "text-xs text-(--ui-text-tertiary)" not in source
     assert "aria-describedby" in source
     assert "aria-invalid" in source
     assert "onBlur" in source
