@@ -166,7 +166,7 @@ function ResultCard({ result, t }) {
       jsxs('div', {
         className: 'flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1',
         children: [
-          jsx('span', { className: 'shrink-0 text-xs text-(--ui-text-tertiary)', children: `#${result.position}` }),
+          jsx('span', { className: 'shrink-0 text-xs text-(--ui-text-secondary)', children: `#${result.position}` }),
           jsx('h2', { className: 'min-w-0 break-words text-sm font-medium text-(--ui-text-primary)', children: result.title })
         ]
       }),
@@ -369,7 +369,7 @@ function BraveSearchPage({ ctx }) {
                 role: 'alert',
                 children: validationError
               })
-            : jsx('p', { className: 'text-xs text-(--ui-text-tertiary)', children: t('queryHint') })
+            : jsx('p', { className: 'text-xs text-(--ui-text-secondary)', children: t('queryHint') })
         ]
       }),
       jsx('div', {
