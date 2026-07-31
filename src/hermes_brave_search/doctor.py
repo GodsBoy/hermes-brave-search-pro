@@ -14,7 +14,6 @@ from .compat import (
     _get_env_value,
     _has_brave_api_key,
     apply_runtime_compat,
-    ensure_recommended_web_config,
 )
 from .constants import BRAVE_API_KEY_COMPAT_ENV, BRAVE_API_KEY_ENV
 
@@ -30,18 +29,17 @@ class Check:
         return "✓" if self.ok else "✗"
 
 
-def _load_web_config() -> dict:
+def _load_config() -> dict:
     try:
         from hermes_cli.config import load_config  # type: ignore
 
         config = load_config()
     except Exception:
-        config = {}
-    web = config.get("web", {}) if isinstance(config, dict) else {}
-    return web if isinstance(web, dict) else {}
+        return {}
+    return config if isinstance(config, dict) else {}
 
 
-def _web_tavily_enabled() -> bool | None:
+def _plugin_statuses() -> dict[str, bool] | None:
     try:
         result = subprocess.run(
             ["hermes", "plugins", "list", "--json"],
@@ -60,23 +58,61 @@ def _web_tavily_enabled() -> bool | None:
         plugins = json.loads(result.stdout)
     except ValueError:
         return None
-
     if not isinstance(plugins, list):
         return None
 
+    statuses: dict[str, bool] = {}
     for plugin in plugins:
         if not isinstance(plugin, dict):
             continue
-        if plugin.get("name") == "web-tavily":
-            return plugin.get("status") == "enabled"
-    return False
+        name = plugin.get("name")
+        if isinstance(name, str):
+            statuses[name] = plugin.get("status") == "enabled"
+    return statuses
+
+
+def _plugin_enabled(statuses: dict[str, bool] | None, name: str) -> bool | None:
+    if statuses is None:
+        return None
+    return statuses.get(name, False)
+
+
+def _tool_override_allowed(config: dict) -> bool:
+    plugins = config.get("plugins", {})
+    if not isinstance(plugins, dict):
+        return False
+    entries = plugins.get("entries", {})
+    if not isinstance(entries, dict):
+        return False
+    brave_entry = entries.get("brave-search", {})
+    return (
+        isinstance(brave_entry, dict)
+        and brave_entry.get("allow_tool_override") is True
+    )
+
+
+def _plugin_check(name: str, enabled: bool | None, enable_command: str) -> Check:
+    if enabled is True:
+        detail = "enabled"
+    elif enabled is False:
+        detail = f"not enabled. Run: {enable_command}"
+    else:
+        detail = "unable to verify. Run: hermes plugins list"
+    return Check(f"{name} plugin", enabled is True, detail)
 
 
 def run_checks() -> list[Check]:
-    web = _load_web_config()
+    config = _load_config()
+    web = config.get("web", {})
+    if not isinstance(web, dict):
+        web = {}
+
+    statuses = _plugin_statuses()
+    brave_enabled = _plugin_enabled(statuses, "brave-search")
+    web_tavily_enabled = _plugin_enabled(statuses, "web-tavily")
     brave_key = _has_brave_api_key()
     tavily_key = bool(_get_env_value(TAVILY_API_KEY_ENV))
-    web_tavily_enabled = _web_tavily_enabled()
+    override_allowed = _tool_override_allowed(config)
     backend = web.get("backend")
     search_backend = web.get("search_backend")
     extract_backend = web.get("extract_backend")
@@ -87,6 +123,21 @@ def run_checks() -> list[Check]:
             brave_key,
             "present" if brave_key else "missing. Get one from https://brave.com/search/api/",
         ),
+        _plugin_check(
+            "brave-search",
+            brave_enabled,
+            "hermes plugins enable brave-search --allow-tool-override",
+        ),
+        Check(
+            "brave-search tool override",
+            override_allowed,
+            "granted"
+            if override_allowed
+            else (
+                "missing. Run: hermes plugins enable brave-search "
+                "--allow-tool-override"
+            ),
+        ),
         Check(
             TAVILY_API_KEY_ENV,
             tavily_key,
@@ -94,16 +145,10 @@ def run_checks() -> list[Check]:
             if tavily_key
             else "missing. Recommended for web_extract. Free key: https://app.tavily.com/",
         ),
-        Check(
-            "web-tavily plugin",
-            web_tavily_enabled is True,
-            "enabled"
-            if web_tavily_enabled is True
-            else (
-                "disabled. Run: hermes plugins enable web-tavily"
-                if web_tavily_enabled is False
-                else "unable to verify. Run: hermes plugins list"
-            ),
+        _plugin_check(
+            "web-tavily",
+            web_tavily_enabled,
+            "hermes plugins enable web-tavily",
         ),
         Check(
             "web.backend",
@@ -143,17 +188,13 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.fix:
-        changed = ensure_recommended_web_config(force=args.force)
-        if changed:
-            print("Updated Hermes config: " + ", ".join(changed))
+        report = apply_runtime_compat(force=args.force)
+        if report.config_changed:
+            print("Updated Hermes config: " + ", ".join(report.config_changed))
         else:
             print("No config changes were needed or possible.")
-
-    report = apply_runtime_compat()
-    if report.picker_patched:
-        print("Applied Brave Pro provider-picker compatibility shim for this process.")
-    for error in report.errors:
-        print(f"Warning: {error}")
+        for error in report.errors:
+            print(f"Warning: {error}")
 
     print("\nBrave Search Pro doctor")
     checks = run_checks()
@@ -166,6 +207,10 @@ def main(argv: list[str] | None = None) -> int:
         print(
             "- Missing API keys can be added during plugin install or in "
             "~/.hermes/.env."
+        )
+        print(
+            "- Run hermes plugins enable brave-search --allow-tool-override, "
+            "then restart the gateway."
         )
         print(
             "- Run with --fix after adding keys to apply the recommended "

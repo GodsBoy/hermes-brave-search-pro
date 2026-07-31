@@ -4,86 +4,10 @@ import sys
 import types
 
 from hermes_brave_search.compat import (
-    BRAVE_PRO_BACKEND,
+    CompatReport,
+    apply_runtime_compat,
     ensure_recommended_web_config,
-    patch_tools_config_picker,
 )
-
-
-def test_patch_tools_config_picker_prefers_explicit_config(monkeypatch):
-    tools_config = types.ModuleType("hermes_cli.tools_config")
-
-    def is_provider_active(provider, config, *, force_fresh=False):
-        return provider.get("web_backend") == config.get("web", {}).get(
-            "search_backend"
-        )
-
-    def old_detect(providers, config, *, force_fresh=False):
-        return 0
-
-    tools_config._is_provider_active = is_provider_active  # type: ignore[attr-defined]
-    tools_config._detect_active_provider_index = old_detect  # type: ignore[attr-defined]
-    tools_config.get_env_value = lambda key: "present"  # type: ignore[attr-defined]
-
-    hermes_cli = types.ModuleType("hermes_cli")
-    hermes_cli.tools_config = tools_config  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "hermes_cli", hermes_cli)
-    monkeypatch.setitem(sys.modules, "hermes_cli.tools_config", tools_config)
-
-    assert patch_tools_config_picker() is True
-
-    providers = [
-        {
-            "name": "Brave Search (Free)",
-            "web_backend": "brave-free",
-            "env_vars": [{"key": "BRAVE_SEARCH_API_KEY"}],
-        },
-        {
-            "name": "Brave Search Pro",
-            "web_backend": BRAVE_PRO_BACKEND,
-            "env_vars": [{"key": "BRAVE_SEARCH_API_KEY"}],
-        },
-    ]
-
-    assert tools_config._detect_active_provider_index(
-        providers,
-        {"web": {"search_backend": BRAVE_PRO_BACKEND}},
-    ) == 1
-
-
-def test_patch_tools_config_picker_prefers_brave_pro_env_fallback(monkeypatch):
-    tools_config = types.ModuleType("hermes_cli.tools_config")
-    tools_config._is_provider_active = (  # type: ignore[attr-defined]
-        lambda provider, config, *, force_fresh=False: False
-    )
-    tools_config._detect_active_provider_index = (  # type: ignore[attr-defined]
-        lambda providers, config, *, force_fresh=False: 0
-    )
-    tools_config.get_env_value = (  # type: ignore[attr-defined]
-        lambda key: "present" if key == "BRAVE_SEARCH_API_KEY" else ""
-    )
-
-    hermes_cli = types.ModuleType("hermes_cli")
-    hermes_cli.tools_config = tools_config  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "hermes_cli", hermes_cli)
-    monkeypatch.setitem(sys.modules, "hermes_cli.tools_config", tools_config)
-
-    patch_tools_config_picker()
-
-    providers = [
-        {
-            "name": "Brave Search (Free)",
-            "web_backend": "brave-free",
-            "env_vars": [{"key": "BRAVE_SEARCH_API_KEY"}],
-        },
-        {
-            "name": "Brave Search Pro",
-            "web_backend": BRAVE_PRO_BACKEND,
-            "env_vars": [{"key": "BRAVE_SEARCH_API_KEY"}],
-        },
-    ]
-
-    assert tools_config._detect_active_provider_index(providers, {}) == 1
 
 
 def test_ensure_recommended_web_config_sets_safe_defaults(monkeypatch):
@@ -141,3 +65,24 @@ def test_ensure_recommended_web_config_does_not_override_other_providers(monkeyp
         "search_backend": "exa",
         "extract_backend": "firecrawl",
     }
+
+
+def test_compat_report_changed_tracks_config_updates():
+    assert CompatReport().changed is False
+    assert CompatReport(config_changed=["web.backend"]).changed is True
+
+
+def test_apply_runtime_compat_captures_config_errors(monkeypatch):
+    def fail_config_update(*, force=False):
+        assert force is True
+        raise RuntimeError("config unavailable")
+
+    monkeypatch.setattr(
+        "hermes_brave_search.compat.ensure_recommended_web_config",
+        fail_config_update,
+    )
+
+    report = apply_runtime_compat(force=True)
+
+    assert report.config_changed == []
+    assert report.errors == ["config update failed: config unavailable"]

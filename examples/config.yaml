@@ -3,7 +3,11 @@
 plugins:
   enabled:
     - brave-search
+  entries:
+    brave-search:
+      allow_tool_override: true
 
 web:
+  backend: "brave-pro"
   search_backend: "brave-pro"
   extract_backend: "tavily"

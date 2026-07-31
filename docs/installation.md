@@ -11,10 +11,12 @@
 Use Hermes' plugin installer with the GitHub owner/repo shorthand:
 
 ```bash
-hermes plugins install GodsBoy/hermes-brave-search-pro --enable
+hermes plugins install GodsBoy/hermes-brave-search-pro --no-enable
+hermes plugins enable brave-search --allow-tool-override
+hermes gateway restart
 ```
 
-This installs the plugin into Hermes' plugin directory and enables the plugin named `brave-search`.
+This installs the plugin into Hermes' plugin directory without enabling it. Because the plugin intentionally overrides Hermes' built-in `brave_search` tool, grant the explicit override permission before restarting the gateway.
 
 ## Direct user-plugin install
 
@@ -23,7 +25,8 @@ You can also clone the repository directly into the user plugin directory:
 ```bash
 git clone https://github.com/GodsBoy/hermes-brave-search-pro.git \
   ~/.hermes/plugins/brave-search
-hermes plugins enable brave-search
+hermes plugins enable brave-search --allow-tool-override
+hermes gateway restart
 ```
 
 For a profile-specific install:
@@ -31,15 +34,23 @@ For a profile-specific install:
 ```bash
 git clone https://github.com/GodsBoy/hermes-brave-search-pro.git \
   ~/.hermes/profiles/myprofile/plugins/brave-search
-hermes --profile myprofile plugins enable brave-search
+hermes --profile myprofile plugins enable brave-search --allow-tool-override
+hermes --profile myprofile gateway restart
+python ~/.hermes/profiles/myprofile/plugins/brave-search/scripts/doctor.py
 ```
 
 From an existing checkout, install a symlink:
 
 ```bash
 ./scripts/install.sh
+hermes plugins enable brave-search --allow-tool-override
+hermes gateway restart
+
 # Optional profile-aware install
 HERMES_PROFILE=myprofile ./scripts/install.sh
+hermes --profile myprofile plugins enable brave-search --allow-tool-override
+hermes --profile myprofile gateway restart
+python ~/.hermes/profiles/myprofile/plugins/brave-search/scripts/doctor.py
 ```
 
 ### Search plus extraction credentials
@@ -109,6 +120,9 @@ plugins:
   enabled:
     - brave-search
     - web-tavily  # optional, only needed for Tavily web_extract
+  entries:
+    brave-search:
+      allow_tool_override: true
 
 web:
   backend: "brave-pro"

@@ -13,17 +13,42 @@ env:
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v8.2.0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install
+        run: |
+          uv venv --python "${{ matrix.python-version }}"
+          uv pip install -e '.[dev]'
+      - name: Lint
+        if: matrix.python-version == '3.11'
+        run: uv run ruff check .
+      - name: Test
+        run: uv run pytest
+
+  hermes-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v8.2.0
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - name: Install
+      - name: Install plugin and current Hermes
         run: |
-          uv venv
+          uv venv --python "3.12"
           uv pip install -e '.[dev]'
-      - name: Lint
-        run: uv run ruff check .
-      - name: Test
-        run: uv run pytest
+          git clone --depth 1 \
+            https://github.com/NousResearch/hermes-agent.git \
+            "$RUNNER_TEMP/hermes-agent"
+          uv pip install -e "$RUNNER_TEMP/hermes-agent"
+      - name: Test PluginManager integration
+        run: uv run pytest tests/test_hermes_plugin_manager.py

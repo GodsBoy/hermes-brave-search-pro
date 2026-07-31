@@ -13,10 +13,7 @@ __all__ = ["BraveProSearchProvider", "register"]
 def register(ctx) -> None:
     """Register the Brave provider and the advanced Brave tool with Hermes."""
 
-    apply_runtime_compat()
-
     provider = BraveProSearchProvider()
-    ctx.register_web_search_provider(provider)
     ctx.register_tool(
         name="brave_search",
         toolset="brave_search",
@@ -31,3 +28,5 @@ def register(ctx) -> None:
             "discussions, suggestions, and raw modes."
         ),
     )
+    apply_runtime_compat()
+    ctx.register_web_search_provider(provider)
