@@ -27,7 +27,7 @@ _SCENARIO = textwrap.dedent(
     from hermes_cli import web_server
 
     mounted = any(
-        route.path == "/api/plugins/brave-search/search"
+        getattr(route, "path", None) == "/api/plugins/brave-search/search"
         for route in web_server.app.routes
     )
     package = sys.modules.get("hermes_brave_search")
