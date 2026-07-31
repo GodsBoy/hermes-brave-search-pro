@@ -369,7 +369,7 @@ export default {
     ctx.register({
       area: ROUTES_AREA,
       data: { path: ROUTE },
-      id: 'brave-search',
+      id: ID,
       render: () => jsx(BraveSearchPage, { ctx }),
       title: 'Brave Search'
     })
