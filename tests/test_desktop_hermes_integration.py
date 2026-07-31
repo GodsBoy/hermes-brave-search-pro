@@ -3,7 +3,6 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
-import re
 import subprocess
 import sys
 import textwrap
@@ -54,6 +53,9 @@ _SCENARIO = textwrap.dedent(
         class FakeClient:
             calls = []
 
+            def __init__(self, *args, **kwargs):
+                pass
+
             def resolved_api_key(self):
                 return "configured"
 
@@ -92,6 +94,127 @@ _SCENARIO = textwrap.dedent(
         result["authenticated_body"] = response.json()
 
     print(json.dumps(result))
+    """
+)
+
+
+_DESKTOP_LOADER_SMOKE = textwrap.dedent(
+    """
+    import { readFileSync } from 'node:fs'
+    import { afterAll, beforeAll, expect, test } from 'vitest'
+
+    import { PALETTE_AREA } from '@/app/command-palette/contrib'
+    import { ROUTES_AREA, SIDEBAR_NAV_AREA } from '@/app/routes'
+    import { registry } from '@/contrib/registry'
+    import { loadRuntimePlugin, unloadRuntimePlugin } from '@/contrib/runtime-loader'
+    import {
+      $pluginRecords,
+      dropPlugin,
+      setPluginEnabled
+    } from '@/contrib/plugins-store'
+
+    const pluginFile = process.env.BRAVE_DESKTOP_PLUGIN
+
+    if (!pluginFile) {
+      throw new Error('BRAVE_DESKTOP_PLUGIN is required')
+    }
+
+    class SourceBlob {
+      readonly parts: BlobPart[]
+      readonly type: string
+
+      constructor(parts: BlobPart[], options: BlobPropertyBag = {}) {
+        this.parts = parts
+        this.type = options.type ?? ''
+      }
+    }
+
+    const originalBlob = globalThis.Blob
+    const originalCreateObjectURL = URL.createObjectURL
+    const originalRevokeObjectURL = URL.revokeObjectURL
+
+    beforeAll(() => {
+      Object.defineProperty(globalThis, 'Blob', {
+        configurable: true,
+        value: SourceBlob
+      })
+      Object.defineProperty(URL, 'createObjectURL', {
+        configurable: true,
+        value: (blob: SourceBlob) => {
+          const source = blob.parts.map(part => String(part)).join('')
+          return `data:text/javascript;charset=utf-8,${encodeURIComponent(source)}`
+        }
+      })
+      Object.defineProperty(URL, 'revokeObjectURL', {
+        configurable: true,
+        value: () => undefined
+      })
+      window.localStorage.clear()
+    })
+
+    afterAll(() => {
+      unloadRuntimePlugin('brave-search')
+      dropPlugin('brave-search')
+      Object.defineProperty(globalThis, 'Blob', {
+        configurable: true,
+        value: originalBlob
+      })
+      Object.defineProperty(URL, 'createObjectURL', {
+        configurable: true,
+        value: originalCreateObjectURL
+      })
+      Object.defineProperty(URL, 'revokeObjectURL', {
+        configurable: true,
+        value: originalRevokeObjectURL
+      })
+    })
+
+    test('loads and activates Brave Search through the runtime loader', async () => {
+      const source = readFileSync(pluginFile, 'utf8')
+      const id = await loadRuntimePlugin(source, 'brave-search', { file: pluginFile })
+
+      expect(id).toBe('brave-search')
+      expect($pluginRecords.get()['brave-search']).toMatchObject({
+        id: 'brave-search',
+        kind: 'disk',
+        status: 'disabled'
+      })
+      expect(registry.getArea(ROUTES_AREA)).toHaveLength(0)
+      expect(registry.getArea(SIDEBAR_NAV_AREA)).toHaveLength(0)
+      expect(registry.getArea(PALETTE_AREA)).toHaveLength(0)
+
+      await setPluginEnabled('brave-search', true)
+
+      expect($pluginRecords.get()['brave-search']?.status).toBe('loaded')
+      expect(registry.getArea(ROUTES_AREA)).toEqual([
+        expect.objectContaining({
+          id: 'brave-search:brave-search',
+          source: 'plugin:brave-search',
+          data: { path: '/brave-search' }
+        })
+      ])
+      expect(registry.getArea(SIDEBAR_NAV_AREA)).toEqual([
+        expect.objectContaining({
+          id: 'brave-search:brave-search-sidebar',
+          source: 'plugin:brave-search',
+          data: {
+            codicon: 'search',
+            label: 'Brave Search',
+            path: '/brave-search'
+          }
+        })
+      ])
+      expect(registry.getArea(PALETTE_AREA)).toEqual([
+        expect.objectContaining({
+          id: 'brave-search:brave-search-palette',
+          source: 'plugin:brave-search',
+          data: expect.objectContaining({
+            id: 'brave-search.open',
+            label: 'Open Brave Search'
+          })
+        })
+      ])
+    })
     """
 )
 
@@ -211,41 +334,47 @@ def test_current_hermes_runtime_mounts_enabled_plugin_and_hides_disabled_plugin(
 
 def test_desktop_plugin_uses_current_hermes_runtime_contract() -> None:
     hermes_source = _hermes_source()
-    plugin_source = (ROOT / "desktop" / "plugin.js").read_text(encoding="utf-8")
-    runtime_loader = (
-        hermes_source / "apps" / "desktop" / "src" / "contrib" / "runtime-loader.ts"
-    ).read_text(encoding="utf-8")
-    runtime_sdk = (
-        hermes_source / "apps" / "desktop" / "src" / "sdk" / "runtime.ts"
-    ).read_text(encoding="utf-8")
-    sdk_index = (
-        hermes_source / "apps" / "desktop" / "src" / "sdk" / "index.ts"
-    ).read_text(encoding="utf-8")
+    desktop_root = hermes_source / "apps" / "desktop"
+    vitest = hermes_source / "node_modules" / ".bin" / "vitest"
+    if not vitest.is_file():
+        pytest.fail(
+            "Current Hermes Desktop dependencies are unavailable; run "
+            "`npm ci --workspace apps/desktop --ignore-scripts` in HERMES_TEST_SOURCE"
+        )
 
-    imports = set(
-        re.findall(
-            r"^import(?:[\s\S]*?from\s+)?['\"]([^'\"]+)['\"]",
-            plugin_source,
-            re.MULTILINE,
-        )
+    runtime_test = (
+        desktop_root
+        / "src"
+        / "contrib"
+        / f"brave-search-runtime-smoke-{os.getpid()}.test.ts"
     )
-    assert imports == {"@hermes/plugin-sdk", "react", "react/jsx-runtime"}
-    for specifier in imports:
-        assert re.search(
-            rf"(?:['\"]{re.escape(specifier)}['\"]|{re.escape(specifier)}): "
-            r"shimUrl",
-            runtime_sdk,
+    assert not runtime_test.exists()
+    runtime_test.write_text(_DESKTOP_LOADER_SMOKE, encoding="utf-8")
+
+    env = os.environ.copy()
+    env["BRAVE_DESKTOP_PLUGIN"] = str(ROOT / "desktop" / "plugin.js")
+    try:
+        result = subprocess.run(
+            [
+                str(vitest),
+                "run",
+                "--config",
+                "vite.config.ts",
+                "--environment",
+                "jsdom",
+                str(runtime_test.relative_to(desktop_root)),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            cwd=desktop_root,
+            env=env,
+            timeout=60,
         )
-    assert (
-        "runtime plugins may only import @hermes/plugin-sdk and react"
-        in runtime_loader
-    )
-    for contribution in ("ROUTES_AREA", "SIDEBAR_NAV_AREA", "PALETTE_AREA"):
-        assert contribution in sdk_index
-        assert contribution in plugin_source
-    assert "id: ID" in plugin_source
-    assert "defaultEnabled: false" in plugin_source
-    assert "ctx.rest('/search'" in plugin_source
+    finally:
+        runtime_test.unlink(missing_ok=True)
+
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_current_hermes_ci_runs_desktop_integration_proof() -> None:

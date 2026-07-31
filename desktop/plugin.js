@@ -19,6 +19,8 @@ const ROUTE = '/brave-search'
 const MAX_QUERY_CHARACTERS = 400
 const MAX_QUERY_WORDS = 50
 const QUERY_ERROR_ID = 'brave-search-query-error'
+const REST_TIMEOUT_MS = 25_000
+const WINDOWS_SHELL_METACHARACTERS = /[&|<>^()%!]/
 
 function focusQuery() {
   document.getElementById('brave-search-query')?.focus()
@@ -45,17 +47,43 @@ function safeExternalUrl(value) {
     return ''
   }
 
-  try {
-    const url = new URL(value.trim())
+  const raw = value.trim()
 
-    if ((url.protocol !== 'http:' && url.protocol !== 'https:') || !url.hostname) {
+  // Current Hermes WSL builds open external links through `cmd.exe /c start`.
+  // Reject command metacharacters here until that bridge uses a shell-free opener.
+  if (WINDOWS_SHELL_METACHARACTERS.test(raw)) {
+    return ''
+  }
+
+  try {
+    const url = new URL(raw)
+    const normalizedUrl = url.toString()
+
+    if (
+      (url.protocol !== 'http:' && url.protocol !== 'https:') ||
+      !url.hostname ||
+      WINDOWS_SHELL_METACHARACTERS.test(normalizedUrl)
+    ) {
       return ''
     }
 
-    return url.toString()
+    return normalizedUrl
   } catch {
     return ''
   }
+}
+
+function beginSingleFlight(pendingRef) {
+  if (pendingRef.current) {
+    return false
+  }
+
+  pendingRef.current = true
+  return true
+}
+
+function finishSingleFlight(pendingRef) {
+  pendingRef.current = false
 }
 
 function safeResults(value) {
@@ -89,6 +117,9 @@ function responseView(response, query) {
   if (response.outcome === 'missing_credential' || response.outcome === 'invalid_credential') {
     return { kind: 'missing_credential', query }
   }
+  if (response.outcome === 'rate_limited') {
+    return { kind: 'rate_limited', query }
+  }
 
   return { kind: 'api_error', query }
 }
@@ -111,6 +142,9 @@ function statusText(view, t) {
   }
   if (view.kind === 'missing_credential') {
     return t('credentialStatus')
+  }
+  if (view.kind === 'rate_limited') {
+    return t('rateLimitStatus')
   }
   if (view.kind === 'backend_unavailable') {
     return t('backendStatus')
@@ -158,14 +192,16 @@ function ResultCard({ result, t }) {
 function BraveSearchPage({ ctx }) {
   const t = usePluginI18n(ID)
   const generationRef = useRef(0)
+  const pendingRef = useRef(false)
   const [query, setQuery] = useState('')
   const [touched, setTouched] = useState(false)
   const [attempted, setAttempted] = useState(false)
   const [view, setView] = useState({ kind: 'idle' })
   const validationError = validateQuery(query)
   const showValidation = Boolean(validationError && (touched || attempted))
+  const pending = view.kind === 'loading'
   const search = useMutation({
-    mutationFn: query => ctx.rest('/search', { method: 'POST', body: { query } })
+    mutationFn: query => ctx.rest('/search', { method: 'POST', body: { query }, timeoutMs: REST_TIMEOUT_MS })
   })
 
   useEffect(() => {
@@ -177,6 +213,10 @@ function BraveSearchPage({ ctx }) {
   }, [])
 
   const runSearch = submittedQuery => {
+    if (!beginSingleFlight(pendingRef)) {
+      return
+    }
+
     const generation = ++generationRef.current
 
     setView({ kind: 'loading', query: submittedQuery })
@@ -199,12 +239,19 @@ function BraveSearchPage({ ctx }) {
         }
 
         setView(responseView(response, submittedQuery))
+      },
+      onSettled: () => {
+        finishSingleFlight(pendingRef)
       }
     })
   }
 
   const submit = event => {
     event.preventDefault()
+    if (pendingRef.current) {
+      return
+    }
+
     const submittedQuery = query.trim()
     const problem = validateQuery(submittedQuery)
 
@@ -221,7 +268,7 @@ function BraveSearchPage({ ctx }) {
   }
 
   const retry = () => {
-    if (!view.query) {
+    if (pendingRef.current || !view.query) {
       return
     }
 
@@ -230,6 +277,7 @@ function BraveSearchPage({ ctx }) {
   }
 
   const retryButton = jsx(Button, {
+    disabled: pending,
     onClick: retry,
     type: 'button',
     variant: 'outline',
@@ -261,6 +309,11 @@ function BraveSearchPage({ ctx }) {
       title: t('credentialTitle'),
       description: t('credentialDescription'),
       children: retryButton
+    })
+  } else if (view.kind === 'rate_limited') {
+    content = jsx(ErrorState, {
+      title: t('rateLimitTitle'),
+      description: t('rateLimitDescription')
     })
   } else if (view.kind === 'backend_unavailable') {
     content = jsx(ErrorState, {
@@ -299,13 +352,14 @@ function BraveSearchPage({ ctx }) {
                 'aria-describedby': showValidation ? QUERY_ERROR_ID : undefined,
                 'aria-invalid': showValidation,
                 className: 'min-w-0 flex-1',
+                disabled: pending,
                 id: 'brave-search-query',
                 onBlur: () => setTouched(true),
                 onChange: event => setQuery(event.target.value),
                 placeholder: t('queryPlaceholder'),
                 value: query
               }),
-              jsx(Button, { type: 'submit', children: t('search') })
+              jsx(Button, { disabled: pending, type: 'submit', children: t('search') })
             ]
           }),
           showValidation
@@ -357,6 +411,9 @@ export default {
         queryHint: 'Up to 400 characters and 50 words.',
         queryLabel: 'Search query',
         queryPlaceholder: 'Search the web',
+        rateLimitDescription: 'Wait a moment before searching again.',
+        rateLimitStatus: 'Brave Search is rate limited. Wait before searching again.',
+        rateLimitTitle: 'Brave Search is temporarily rate limited',
         resultsLabel: 'Brave Search results',
         resultsStatus: count => `${count} Brave Search result${count === 1 ? '' : 's'} ready.`,
         retry: 'Retry search',

@@ -8,6 +8,9 @@ from urllib.parse import urlsplit
 from .client import BraveSearchClient
 
 DESKTOP_RESULT_LIMIT = 5
+DESKTOP_REQUEST_TIMEOUT_SECONDS = 6.0
+DESKTOP_MAX_RETRIES = 2
+DESKTOP_RETRY_BACKOFF_SECONDS = 0.5
 MAX_QUERY_CHARACTERS = 400
 MAX_QUERY_WORDS = 50
 
@@ -25,7 +28,11 @@ def search_desktop_web(
     if validation_error:
         return {"outcome": "validation_error", "message": validation_error}
 
-    client = client or BraveSearchClient()
+    if client is None:
+        client = BraveSearchClient()
+        client.timeout = DESKTOP_REQUEST_TIMEOUT_SECONDS
+        client.max_retries = DESKTOP_MAX_RETRIES
+        client.backoff_seconds = DESKTOP_RETRY_BACKOFF_SECONDS
     if not client.resolved_api_key():
         return {
             "outcome": "missing_credential",

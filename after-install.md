@@ -2,12 +2,27 @@
 
 This plugin works best with Brave for search. Tavily extraction is optional and uses Hermes' separate bundled `web-tavily` plugin.
 
-Install the separate Desktop surface, enable the backend with its intentional built-in tool override permission, then restart the gateway:
+Install the separate Desktop surface, enable the backend with its intentional built-in tool override permission, then restart the gateway. Use the same profile for every command.
+
+### Default profile
 
 ```bash
-~/.hermes/plugins/brave-search/scripts/install-desktop.sh
+HERMES_PROFILE=default \
+  ~/.hermes/plugins/brave-search/scripts/install-desktop.sh
 hermes plugins enable brave-search --allow-tool-override
 hermes gateway restart
+```
+
+### Named profile
+
+Replace `myprofile` with your profile name. The plugin path, installer profile,
+enable command, and gateway restart must all use that same profile.
+
+```bash
+HERMES_PROFILE=myprofile \
+  ~/.hermes/profiles/myprofile/plugins/brave-search/scripts/install-desktop.sh
+hermes --profile myprofile plugins enable brave-search --allow-tool-override
+hermes --profile myprofile gateway restart
 ```
 
 ## Desktop Brave Search

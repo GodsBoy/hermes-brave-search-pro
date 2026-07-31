@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -109,6 +110,25 @@ def test_after_install_does_not_claim_private_picker_patching() -> None:
     assert re.search(r"\bpatch(?:ed|ing)?\b", text, re.IGNORECASE) is None
 
 
+def test_after_install_includes_matching_default_and_named_profile_flows() -> None:
+    text = read(ROOT / "after-install.md")
+    assert_in_order(
+        text,
+        "HERMES_PROFILE=default",
+        "~/.hermes/plugins/brave-search/scripts/install-desktop.sh",
+        "hermes plugins enable brave-search --allow-tool-override",
+        "hermes gateway restart",
+    )
+    assert_in_order(
+        text,
+        "HERMES_PROFILE=myprofile",
+        "~/.hermes/profiles/myprofile/plugins/brave-search/scripts/install-desktop.sh",
+        "hermes --profile myprofile plugins enable ",
+        "brave-search --allow-tool-override",
+        "hermes --profile myprofile gateway restart",
+    )
+
+
 def test_desktop_guidance_keeps_renderer_and_backend_boundaries_explicit() -> None:
     for path in (ROOT / "README.md", ROOT / "docs" / "installation.md"):
         text = read(path)
@@ -139,12 +159,15 @@ def run_script(
     *,
     profile: str | None = None,
     check: bool = True,
+    extra_env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str] | str:
     env = os.environ.copy()
     env["HOME"] = str(home)
     env["HERMES_HOME"] = str(home / ".hermes")
     if profile is not None:
         env["HERMES_PROFILE"] = profile
+    if extra_env is not None:
+        env.update(extra_env)
 
     result = subprocess.run(
         ["bash", str(ROOT / "scripts" / script_name)],
@@ -309,6 +332,84 @@ def test_symlink_installer_preflights_both_targets_before_linking(
                 else backend_target
             )
             assert not other_target.exists()
+
+
+def test_symlink_installer_refuses_post_preflight_conflict(
+    tmp_path: Path,
+) -> None:
+    hermes_home = tmp_path / ".hermes"
+    backend_target = hermes_home / "plugins" / "brave-search"
+    desktop_target = hermes_home / "desktop-plugins" / "brave-search"
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    mkdir_binary = shutil.which("mkdir")
+    assert mkdir_binary is not None
+    (bin_dir / "mkdir").write_text(
+        "#!/bin/sh\n"
+        f'"{mkdir_binary}" -p "$INSTALL_TEST_RACE_PARENT"\n'
+        'printf "conflict" > "$INSTALL_TEST_RACE_TARGET"\n'
+        f'exec "{mkdir_binary}" "$@"\n',
+        encoding="utf-8",
+    )
+    (bin_dir / "mkdir").chmod(0o755)
+
+    result = run_script(
+        tmp_path,
+        "install.sh",
+        check=False,
+        extra_env={
+            "PATH": f"{bin_dir}:{os.environ['PATH']}",
+            "INSTALL_TEST_RACE_PARENT": str(backend_target.parent),
+            "INSTALL_TEST_RACE_TARGET": str(backend_target),
+        },
+    )
+
+    assert isinstance(result, subprocess.CompletedProcess)
+    assert result.returncode == 1
+    assert "Refusing to overwrite existing plugin path" in result.stderr
+    assert backend_target.read_text(encoding="utf-8") == "conflict"
+    assert not desktop_target.exists()
+
+
+def test_symlink_installer_rolls_back_only_its_first_link_on_second_link_failure(
+    tmp_path: Path,
+) -> None:
+    hermes_home = tmp_path / ".hermes"
+    backend_target = hermes_home / "plugins" / "brave-search"
+    desktop_target = hermes_home / "desktop-plugins" / "brave-search"
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    python_binary = shutil.which("python3") or shutil.which("python")
+    mkdir_binary = shutil.which("mkdir")
+    assert python_binary is not None
+    assert mkdir_binary is not None
+    (bin_dir / "python3").write_text(
+        "#!/bin/sh\n"
+        'if [ "$3" = "$INSTALL_TEST_RACE_TARGET" ]; then\n'
+        f'  "{mkdir_binary}" -p "$INSTALL_TEST_RACE_TARGET"\n'
+        "  exit 1\n"
+        "fi\n"
+        f'exec "{python_binary}" "$@"\n',
+        encoding="utf-8",
+    )
+    (bin_dir / "python3").chmod(0o755)
+
+    result = run_script(
+        tmp_path,
+        "install.sh",
+        check=False,
+        extra_env={
+            "PATH": f"{bin_dir}:{os.environ['PATH']}",
+            "INSTALL_TEST_RACE_TARGET": str(desktop_target),
+        },
+    )
+
+    assert isinstance(result, subprocess.CompletedProcess)
+    assert result.returncode == 1
+    assert "Refusing to overwrite existing plugin path" in result.stderr
+    assert "Rolled back:" in result.stdout
+    assert not backend_target.exists()
+    assert desktop_target.is_dir()
 
 
 def test_standalone_desktop_installer_links_only_desktop_surface(

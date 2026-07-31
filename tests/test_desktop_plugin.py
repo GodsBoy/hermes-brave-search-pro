@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 from pathlib import Path
@@ -10,6 +11,19 @@ PLUGIN = ROOT / "desktop" / "plugin.js"
 
 def plugin_source() -> str:
     return PLUGIN.read_text()
+
+
+def run_helper(helper_start: str, helper_end: str, expression: str):
+    source = plugin_source()
+    helper = source[source.index(helper_start) : source.index(helper_end)]
+    script = f"{helper}\nconsole.log(JSON.stringify({expression}))"
+    result = subprocess.run(
+        ["node", "--input-type=module", "--eval", script],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return json.loads(result.stdout)
 
 
 def test_desktop_plugin_is_plain_esm_with_only_supported_imports():
@@ -46,6 +60,8 @@ def test_desktop_plugin_uses_only_scoped_search_requests_and_bounds_queries():
     assert "ctx.rest('/search'" in source
     assert "method: 'POST'" in source
     assert "body: { query }" in source
+    assert "timeoutMs: REST_TIMEOUT_MS" in source
+    assert "const REST_TIMEOUT_MS = 25_000" in source
     assert "fetch(" not in source
     assert "process.env" not in source
     assert "BRAVE_API_KEY" not in source
@@ -72,6 +88,38 @@ def test_desktop_plugin_has_accessible_validation_and_async_status_contract():
     assert "kind: 'missing_credential'" in source
     assert "kind: 'backend_unavailable'" in source
     assert "kind: 'api_error'" in source
+    assert "kind: 'rate_limited'" in source
+
+
+def test_desktop_plugin_uses_a_synchronous_single_flight_guard_and_disables_controls():
+    source = plugin_source()
+
+    assert "if (!beginSingleFlight(pendingRef))" in source
+    assert "if (pendingRef.current)" in source
+    assert "if (pendingRef.current || !view.query)" in source
+    assert "onSettled: () =>" in source
+    assert "finishSingleFlight(pendingRef)" in source
+    assert source.count("disabled: pending") == 3
+
+    assert run_helper(
+        "function beginSingleFlight",
+        "function safeResults",
+        "(() => { const ref = { current: false }; "
+        "return [beginSingleFlight(ref), beginSingleFlight(ref), ref.current, "
+        "finishSingleFlight(ref), beginSingleFlight(ref)] })()",
+    ) == [True, False, True, None, True]
+
+
+def test_desktop_plugin_shows_rate_limit_wait_state_without_immediate_retry():
+    source = plugin_source()
+    rate_limit_view = source[
+        source.index("} else if (view.kind === 'rate_limited')") :
+        source.index("} else if (view.kind === 'backend_unavailable')")
+    ]
+
+    assert "rateLimitTitle" in rate_limit_view
+    assert "rateLimitDescription" in rate_limit_view
+    assert "retryButton" not in rate_limit_view
 
 
 def test_desktop_plugin_rejects_stale_results_and_unsafe_external_urls():
@@ -79,8 +127,18 @@ def test_desktop_plugin_rejects_stale_results_and_unsafe_external_urls():
 
     assert "generationRef.current" in source
     assert "if (generation !== generationRef.current)" in source
-    assert "new URL(value.trim())" in source
+    assert "new URL(raw)" in source
     assert "url.protocol !== 'http:' && url.protocol !== 'https:'" in source
     assert "url.hostname" in source
     assert "window.hermesDesktop?.openExternal?.(url)" in source
     assert "window.open(" not in source
+
+    assert run_helper(
+        "const WINDOWS_SHELL_METACHARACTERS",
+        "function safeResults",
+        "['https://example.com/docs', "
+        "'https://example.com/?next=1&calc.exe', "
+        "'https://example.com/%26calc.exe', "
+        "'https://example.com/%COMSPEC%', "
+        "'https://example.com/!COMSPEC!'].map(safeExternalUrl)",
+    ) == ["https://example.com/docs", "", "", "", ""]

@@ -29,6 +29,26 @@ fi
 BACKEND_TARGET_DIR="$HERMES_BASE/plugins/$PLUGIN_DIR_NAME"
 DESKTOP_TARGET_DIR="$HERMES_BASE/desktop-plugins/$PLUGIN_DIR_NAME"
 CONFIG_PATH="$HERMES_BASE/config.yaml"
+CREATED_TARGETS=()
+CREATED_SOURCES=()
+CREATED_LINK_IDENTITIES=()
+
+PYTHON=""
+for python_candidate in python3 python; do
+  if command -v "$python_candidate" >/dev/null 2>&1; then
+    candidate_path="$(command -v "$python_candidate")"
+    if "$candidate_path" -c \
+      'import sys; raise SystemExit(sys.version_info < (3, 6))' \
+      >/dev/null 2>&1; then
+      PYTHON="$candidate_path"
+      break
+    fi
+  fi
+done
+if [[ -z "$PYTHON" ]]; then
+  echo "Python 3.6 or newer is required to install Brave Search Pro." >&2
+  exit 1
+fi
 
 print_hermes_step() {
   local command="$1"
@@ -64,16 +84,91 @@ preflight_target() {
   fi
 }
 
+rollback_created_links() {
+  local index target source link_identity
+
+  for ((index = ${#CREATED_TARGETS[@]} - 1; index >= 0; index--)); do
+    target="${CREATED_TARGETS[$index]}"
+    source="${CREATED_SOURCES[$index]}"
+    link_identity="${CREATED_LINK_IDENTITIES[$index]}"
+
+    # Only remove the exact symlink this invocation created. If another process
+    # replaced it, leave that path untouched.
+    if "$PYTHON" - "$target" "$source" "$link_identity" <<'PY'
+import os
+import sys
+
+target, source, expected_identity = sys.argv[1:]
+try:
+    status = os.lstat(target)
+except FileNotFoundError:
+    raise SystemExit(1)
+
+if (
+    not os.path.islink(target)
+    or os.readlink(target) != source
+    or f"{status.st_dev}:{status.st_ino}" != expected_identity
+):
+    raise SystemExit(1)
+
+os.unlink(target)
+PY
+    then
+      echo "Rolled back: $target"
+    fi
+  done
+}
+
+create_symlink() {
+  local source="$1"
+  local target="$2"
+
+  "$PYTHON" - "$source" "$target" <<'PY'
+import os
+import sys
+
+source, target = sys.argv[1:]
+try:
+    os.symlink(source, target)
+except FileExistsError:
+    raise SystemExit(1)
+except OSError as error:
+    print(f"Unable to create symlink at {target}: {error}", file=sys.stderr)
+    raise SystemExit(1)
+
+status = os.lstat(target)
+print(f"{status.st_dev}:{status.st_ino}")
+PY
+}
+
 install_target() {
   local target="$1"
   local source="$2"
   local current_target
+  local link_identity
+
+  # Preflight is not enough: another process can create a path after the
+  # initial check and before this target is installed.
+  if ! preflight_target "$target" "$source"; then
+    return 1
+  fi
 
   if [[ -e "$target" || -L "$target" ]]; then
     current_target="$(readlink "$target" 2>/dev/null || true)"
     echo "Already installed: $target -> $current_target"
   else
-    ln -s "$source" "$target"
+    if ! link_identity="$(create_symlink "$source" "$target")"; then
+      # Report a useful conflict if the destination appeared after the
+      # install-time check. Do not overwrite or remove that conflicting path.
+      if [[ -e "$target" || -L "$target" ]]; then
+        preflight_target "$target" "$source" || true
+      fi
+      echo "Unable to install plugin path: $target" >&2
+      return 1
+    fi
+    CREATED_TARGETS+=("$target")
+    CREATED_SOURCES+=("$source")
+    CREATED_LINK_IDENTITIES+=("$link_identity")
     echo "Installed: $target -> $source"
   fi
 }
@@ -86,8 +181,14 @@ if ! preflight_target "$BACKEND_TARGET_DIR" "$REPO_ROOT" || \
 fi
 
 mkdir -p "$(dirname "$BACKEND_TARGET_DIR")" "$(dirname "$DESKTOP_TARGET_DIR")"
-install_target "$BACKEND_TARGET_DIR" "$REPO_ROOT"
-install_target "$DESKTOP_TARGET_DIR" "$REPO_ROOT/desktop"
+if ! install_target "$BACKEND_TARGET_DIR" "$REPO_ROOT"; then
+  rollback_created_links
+  exit 1
+fi
+if ! install_target "$DESKTOP_TARGET_DIR" "$REPO_ROOT/desktop"; then
+  rollback_created_links
+  exit 1
+fi
 
 cat <<EOF
 

@@ -50,5 +50,7 @@ jobs:
             https://github.com/NousResearch/hermes-agent.git \
             "$RUNNER_TEMP/hermes-agent"
           uv pip install -e "$RUNNER_TEMP/hermes-agent"
+          npm --prefix "$RUNNER_TEMP/hermes-agent" ci \
+            --workspace apps/desktop --ignore-scripts
       - name: Test current Hermes integrations
         run: uv run pytest tests/test_hermes_plugin_manager.py tests/test_desktop_hermes_integration.py

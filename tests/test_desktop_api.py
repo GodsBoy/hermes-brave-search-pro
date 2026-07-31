@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+import hermes_brave_search.desktop as desktop
 from hermes_brave_search.desktop import search_desktop_web
 
 
@@ -85,6 +86,27 @@ def test_desktop_search_reports_missing_credential_without_calling_client():
     assert client.calls == []
 
 
+def test_desktop_search_constructs_client_with_bounded_desktop_budget(monkeypatch):
+    constructed: list[FakeClient] = []
+
+    class ConfiguredFakeClient(FakeClient):
+        def __init__(self):
+            super().__init__({"success": True, "data": {"web": []}})
+            constructed.append(self)
+
+    monkeypatch.setattr(desktop, "BraveSearchClient", ConfiguredFakeClient)
+
+    assert search_desktop_web("Hermes Agent") == {
+        "outcome": "empty",
+        "results": [],
+    }
+    assert len(constructed) == 1
+    assert constructed[0].timeout == 6.0
+    assert constructed[0].max_retries == 2
+    assert constructed[0].backoff_seconds == 0.5
+    assert 6.0 * 3 + 0.5 * (1 + 2) == 19.5
+
+
 @pytest.mark.parametrize(
     "result",
     [
@@ -104,20 +126,54 @@ def test_desktop_search_treats_empty_or_malformed_web_data_as_successful_empty(r
 
 
 @pytest.mark.parametrize(
-    "result",
+    ("result", "expected"),
     [
-        {"success": False, "error": "timeout with X-Subscription-Token secret-value"},
-        {"success": False, "error": "429 quota exceeded"},
-        {"success": False, "error": "401 invalid key secret-value"},
-        RuntimeError("Traceback secret-value"),
+        (
+            {"success": False, "error": "BRAVE_SEARCH_API_KEY is required"},
+            {
+                "outcome": "missing_credential",
+                "message": "BRAVE_SEARCH_API_KEY is required for Brave Search.",
+            },
+        ),
+        (
+            {
+                "success": False,
+                "error": "timeout with X-Subscription-Token secret-value",
+            },
+            {
+                "outcome": "api_error",
+                "message": "Brave Search could not complete this request. Try again.",
+            },
+        ),
+        (
+            {"success": False, "error": "429 quota exceeded"},
+            {
+                "outcome": "rate_limited",
+                "message": "Brave Search is temporarily unavailable. Try again later.",
+            },
+        ),
+        (
+            {"success": False, "error": "401 invalid key secret-value"},
+            {
+                "outcome": "invalid_credential",
+                "message": "Brave Search credentials were not accepted.",
+            },
+        ),
+        (
+            RuntimeError("Traceback secret-value"),
+            {
+                "outcome": "api_error",
+                "message": "Brave Search could not complete this request. Try again.",
+            },
+        ),
     ],
 )
-def test_desktop_search_maps_client_failures_to_safe_outcomes(result):
+def test_desktop_search_maps_client_failures_to_exact_safe_outcomes(result, expected):
     client = FakeClient(result)
 
     response = search_desktop_web("Hermes Agent", client=client)
 
-    assert response["outcome"] in {"api_error", "invalid_credential", "rate_limited"}
+    assert response == expected
     assert "secret-value" not in json.dumps(response)
     assert "Traceback" not in json.dumps(response)
     assert "X-Subscription-Token" not in json.dumps(response)
