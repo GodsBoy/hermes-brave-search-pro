@@ -1,0 +1,259 @@
+from __future__ import annotations
+
+import importlib.util
+import json
+import os
+import re
+import subprocess
+import sys
+import textwrap
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parents[1]
+PLUGIN_ID = "brave-search"
+
+
+_SCENARIO = textwrap.dedent(
+    """
+    import json
+    import sys
+    from pathlib import Path
+
+    enabled = sys.argv[1] == "enabled"
+
+    assert "hermes_brave_search" not in sys.modules
+    from fastapi.testclient import TestClient
+    from hermes_cli import web_server
+
+    mounted = any(
+        route.path == "/api/plugins/brave-search/search"
+        for route in web_server.app.routes
+    )
+    package = sys.modules.get("hermes_brave_search")
+
+    result = {
+        "mounted": mounted,
+        "package_path": (
+            str(Path(package.__file__).resolve().parent) if package else None
+        ),
+    }
+
+    client = TestClient(web_server.app)
+    unauthenticated = client.post(
+        "/api/plugins/brave-search/search", json={"query": "Hermes Agent"}
+    )
+    result["unauthenticated_status"] = unauthenticated.status_code
+    result["unauthenticated_body"] = unauthenticated.json()
+
+    headers = {"X-Hermes-Session-Token": web_server._SESSION_TOKEN}
+    if enabled:
+        import hermes_brave_search.desktop as desktop
+
+        class FakeClient:
+            calls = []
+
+            def resolved_api_key(self):
+                return "configured"
+
+            def search(self, query, *, mode, limit):
+                self.calls.append({"query": query, "mode": mode, "limit": limit})
+                return {
+                    "success": True,
+                    "data": {
+                        "web": [
+                            {
+                                "title": "Hermes Agent",
+                                "description": "Desktop plugin documentation",
+                                "url": "https://hermes-agent.nousresearch.com/docs",
+                                "position": 1,
+                            }
+                        ]
+                    },
+                }
+
+        desktop.BraveSearchClient = FakeClient
+        response = client.post(
+            "/api/plugins/brave-search/search",
+            json={"query": "Hermes Agent"},
+            headers=headers,
+        )
+        result["authenticated_status"] = response.status_code
+        result["authenticated_body"] = response.json()
+        result["client_calls"] = FakeClient.calls
+    else:
+        response = client.post(
+            "/api/plugins/brave-search/search",
+            json={"query": "Hermes Agent"},
+            headers=headers,
+        )
+        result["authenticated_status"] = response.status_code
+        result["authenticated_body"] = response.json()
+
+    print(json.dumps(result))
+    """
+)
+
+
+def _hermes_python() -> str:
+    configured = os.environ.get("HERMES_TEST_PYTHON")
+    if configured:
+        return configured
+    if importlib.util.find_spec("hermes_cli") is not None:
+        return sys.executable
+    pytest.skip(
+        "Hermes is not installed in this environment; set HERMES_TEST_PYTHON "
+        "to a current Hermes interpreter"
+    )
+
+
+def _hermes_source() -> Path:
+    configured = os.environ.get("HERMES_TEST_SOURCE")
+    if configured:
+        source = Path(configured)
+    else:
+        result = subprocess.run(
+            [
+                _hermes_python(),
+                "-c",
+                "from pathlib import Path; import hermes_cli; "
+                "print(Path(hermes_cli.__file__).resolve().parents[1])",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        source = Path(result.stdout.strip())
+    if not source.is_dir():
+        pytest.skip(f"Current Hermes source is unavailable at {source}")
+    return source
+
+
+def _run_scenario(tmp_path: Path, *, enabled: bool) -> dict[str, object]:
+    hermes_home = tmp_path / "home" / ".hermes"
+    backend_root = hermes_home / "plugins" / PLUGIN_ID
+    desktop_root = hermes_home / "desktop-plugins" / PLUGIN_ID
+    backend_root.parent.mkdir(parents=True)
+    desktop_root.parent.mkdir(parents=True)
+    backend_root.symlink_to(ROOT, target_is_directory=True)
+    desktop_root.symlink_to(ROOT / "desktop", target_is_directory=True)
+    assert backend_root.resolve() == ROOT
+    assert desktop_root.resolve() == ROOT / "desktop"
+    (hermes_home / "config.yaml").write_text(
+        json.dumps({"plugins": {"enabled": [PLUGIN_ID] if enabled else []}}),
+        encoding="utf-8",
+    )
+
+    env = os.environ.copy()
+    env.update(
+        {
+            "HOME": str(tmp_path / "home"),
+            "HERMES_HOME": str(hermes_home),
+            "HERMES_ENABLE_PROJECT_PLUGINS": "0",
+        }
+    )
+    for name in ("BRAVE_API_KEY", "BRAVE_SEARCH_API_KEY", "TAVILY_API_KEY"):
+        env.pop(name, None)
+
+    result = subprocess.run(
+        [
+            _hermes_python(),
+            "-c",
+            _SCENARIO,
+            "enabled" if enabled else "disabled",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        cwd=ROOT,
+        env=env,
+        timeout=60,
+    )
+    assert result.returncode == 0, result.stderr
+    return json.loads(result.stdout.splitlines()[-1])
+
+
+def test_current_hermes_runtime_mounts_enabled_plugin_and_hides_disabled_plugin(
+    tmp_path: Path,
+) -> None:
+    enabled = _run_scenario(tmp_path / "enabled", enabled=True)
+
+    assert enabled["mounted"] is True
+    assert enabled["package_path"] == str(ROOT / "src" / "hermes_brave_search")
+    assert enabled["unauthenticated_status"] == 401
+    assert enabled["unauthenticated_body"] == {"detail": "Unauthorized"}
+    assert enabled["authenticated_status"] == 200
+    assert enabled["authenticated_body"] == {
+        "outcome": "results",
+        "results": [
+            {
+                "title": "Hermes Agent",
+                "description": "Desktop plugin documentation",
+                "url": "https://hermes-agent.nousresearch.com/docs",
+                "position": 1,
+            }
+        ],
+    }
+    assert enabled["client_calls"] == [
+        {"query": "Hermes Agent", "mode": "web", "limit": 5}
+    ]
+
+    disabled = _run_scenario(tmp_path / "disabled", enabled=False)
+
+    assert disabled["mounted"] is False
+    assert disabled["package_path"] is None
+    assert disabled["unauthenticated_status"] == 401
+    assert disabled["unauthenticated_body"] == {"detail": "Unauthorized"}
+    assert disabled["authenticated_status"] == 404
+    assert disabled["authenticated_body"] == {"detail": "Plugin not found"}
+
+
+def test_desktop_plugin_uses_current_hermes_runtime_contract() -> None:
+    hermes_source = _hermes_source()
+    plugin_source = (ROOT / "desktop" / "plugin.js").read_text(encoding="utf-8")
+    runtime_loader = (
+        hermes_source / "apps" / "desktop" / "src" / "contrib" / "runtime-loader.ts"
+    ).read_text(encoding="utf-8")
+    runtime_sdk = (
+        hermes_source / "apps" / "desktop" / "src" / "sdk" / "runtime.ts"
+    ).read_text(encoding="utf-8")
+    sdk_index = (
+        hermes_source / "apps" / "desktop" / "src" / "sdk" / "index.ts"
+    ).read_text(encoding="utf-8")
+
+    imports = set(
+        re.findall(
+            r"^import(?:[\s\S]*?from\s+)?['\"]([^'\"]+)['\"]",
+            plugin_source,
+            re.MULTILINE,
+        )
+    )
+    assert imports == {"@hermes/plugin-sdk", "react", "react/jsx-runtime"}
+    for specifier in imports:
+        assert re.search(
+            rf"(?:['\"]{re.escape(specifier)}['\"]|{re.escape(specifier)}): "
+            r"shimUrl",
+            runtime_sdk,
+        )
+    assert (
+        "runtime plugins may only import @hermes/plugin-sdk and react"
+        in runtime_loader
+    )
+    for contribution in ("ROUTES_AREA", "SIDEBAR_NAV_AREA", "PALETTE_AREA"):
+        assert contribution in sdk_index
+        assert contribution in plugin_source
+    assert "id: ID" in plugin_source
+    assert "defaultEnabled: false" in plugin_source
+    assert "ctx.rest('/search'" in plugin_source
+
+
+def test_current_hermes_ci_runs_desktop_integration_proof() -> None:
+    workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert (
+        "tests/test_hermes_plugin_manager.py tests/test_desktop_hermes_integration.py"
+        in workflow
+    )
