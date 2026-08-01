@@ -261,6 +261,13 @@ git clone https://github.com/GodsBoy/hermes-brave-search-pro.git \
 ~/hermes-brave-search-desktop/scripts/install-desktop.sh
 ```
 
+For a named local profile, run:
+
+```bash
+HERMES_PROFILE=myprofile \
+  ~/hermes-brave-search-desktop/scripts/install-desktop.sh
+```
+
 Keep this checkout in place. The installer creates a symlink from the selected
 Desktop profile to its `desktop/` directory, so removing the checkout breaks
 the renderer. This flow does not create a local backend link. Deploy, enable,

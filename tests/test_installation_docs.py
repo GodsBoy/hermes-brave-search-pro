@@ -164,6 +164,8 @@ def test_remote_desktop_guidance_uses_a_persistent_local_renderer_checkout() -> 
             "git clone https://github.com/GodsBoy/hermes-brave-search-pro.git \\\n"
             "  ~/hermes-brave-search-desktop",
             "~/hermes-brave-search-desktop/scripts/install-desktop.sh",
+            "HERMES_PROFILE=myprofile \\\n"
+            "  ~/hermes-brave-search-desktop/scripts/install-desktop.sh",
             "Keep this checkout",
         )
         assert "does not create a local backend link" in text
