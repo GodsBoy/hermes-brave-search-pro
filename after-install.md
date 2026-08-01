@@ -1,14 +1,18 @@
 # Brave Search Pro installed
 
-This plugin works best with Brave for search. Tavily extraction is optional and uses Hermes' separate bundled `web-tavily` plugin.
+This plugin works best with Brave for search. Tavily extraction is optional and
+uses Hermes' separate bundled `web-tavily` plugin. Hermes Desktop is also
+optional: finish the backend setup first, then add the local renderer only if
+you want the Desktop page.
 
-Install the separate Desktop surface, enable the backend with its intentional built-in tool override permission, then restart the gateway. Use the same profile for every command.
+## Finish backend setup
+
+Enable the backend with its intentional built-in tool override permission, then
+restart the active gateway. Use the same profile for every backend command.
 
 ### Default profile
 
 ```bash
-HERMES_PROFILE=default \
-  ~/.hermes/plugins/brave-search/scripts/install-desktop.sh
 hermes plugins enable brave-search --allow-tool-override
 hermes gateway restart
 ```
@@ -19,22 +23,45 @@ Replace `myprofile` with your profile name. The plugin path, installer profile,
 enable command, and gateway restart must all use that same profile.
 
 ```bash
-HERMES_PROFILE=myprofile \
-  ~/.hermes/profiles/myprofile/plugins/brave-search/scripts/install-desktop.sh
 hermes --profile myprofile plugins enable brave-search --allow-tool-override
 hermes --profile myprofile gateway restart
 ```
 
 ## Desktop Brave Search
 
-The Desktop page is a separate plugin and stays disabled until you enable it in
-Hermes Desktop Settings.
+The Desktop page is an optional plugin and stays disabled until you enable it
+in Hermes Desktop Settings. It is a local renderer, not a backend installer.
+
+After the backend is ready, install the renderer for the selected local profile:
+
+### Default local profile
+
+```bash
+~/.hermes/plugins/brave-search/scripts/install-desktop.sh
+```
+
+### Named local profile
+
+```bash
+HERMES_PROFILE=myprofile \
+  ~/.hermes/profiles/myprofile/plugins/brave-search/scripts/install-desktop.sh
+```
+
+The Desktop-only installer creates the selected profile's
+`desktop-plugins/brave-search` link and leaves `plugins/brave-search` untouched.
+It does not enable the backend, configure credentials, or deploy to a remote
+gateway. Enable Brave Search separately in Hermes Desktop Settings. That
+Settings toggle controls only the renderer and does not require a gateway
+restart.
 
 Brave Desktop search needs only `BRAVE_SEARCH_API_KEY`. Tavily remains an
 optional, separate extraction integration. The Desktop surface uses the active
-profile, so switched or remote backends need their own deployed, enabled Python
-plugin and restarted gateway. Desktop loading does not automatically import a
-project Python plugin into that gateway.
+profile, so switched profiles need their own current, enabled, credentialed
+Python backend. For a remote backend, install the renderer locally, then deploy
+or update the Python plugin on the remote active profile separately, enable it
+with `--allow-tool-override`, and restart that remote gateway after its backend
+route changes. Desktop loading does not automatically import a project Python
+plugin into that gateway.
 
 The `brave_search` tool also supports Brave's dedicated LLM Context API and Brave Place Search API. Use `mode="llm"` or `mode="context"` for query-to-context chunks, `mode="both"` for Brave web results plus those context chunks, `mode="place"` or `mode="local"` for Place Search, and `mode="pois"` or `mode="descriptions"` for follow-up POI details.
 

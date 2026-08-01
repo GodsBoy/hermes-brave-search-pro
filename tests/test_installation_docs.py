@@ -29,41 +29,44 @@ def assert_in_order(text: str, *fragments: str) -> None:
         position = next_position
 
 
-def test_fresh_install_guidance_grants_override_before_restart() -> None:
+def test_fresh_install_guidance_completes_backend_before_optional_desktop() -> None:
     for path in (ROOT / "README.md", ROOT / "docs" / "installation.md"):
         text = read(path)
         assert_in_order(
             text,
             "hermes plugins install GodsBoy/hermes-brave-search-pro --no-enable",
-            "scripts/install-desktop.sh",
             "hermes plugins enable brave-search --allow-tool-override",
             "hermes gateway restart",
+            "## Desktop Brave Search",
+            "scripts/install-desktop.sh",
         )
 
 
-def test_direct_and_profile_guidance_grants_override_before_restart() -> None:
+def test_direct_and_profile_guidance_complete_backend_before_optional_desktop() -> None:
     for path in (ROOT / "README.md", ROOT / "docs" / "installation.md"):
         text = read(path)
         assert_in_order(
             text,
             "git clone https://github.com/GodsBoy/hermes-brave-search-pro.git \\\n"
             "  ~/.hermes/plugins/brave-search",
-            "~/.hermes/plugins/brave-search/scripts/install-desktop.sh",
             "hermes plugins enable brave-search --allow-tool-override",
             "hermes gateway restart",
+            "## Desktop Brave Search",
+            "~/.hermes/plugins/brave-search/scripts/install-desktop.sh",
         )
         assert_in_order(
             text,
             "git clone https://github.com/GodsBoy/hermes-brave-search-pro.git \\\n"
             "  ~/.hermes/profiles/myprofile/plugins/brave-search",
-            "HERMES_PROFILE=myprofile \\\n"
-            "  ~/.hermes/profiles/myprofile/plugins/brave-search/"
-            "scripts/install-desktop.sh",
             "hermes --profile myprofile plugins enable "
             "brave-search --allow-tool-override",
             "hermes --profile myprofile gateway restart",
             "python ~/.hermes/profiles/myprofile/plugins/brave-search/"
             "scripts/doctor.py",
+            "## Desktop Brave Search",
+            "HERMES_PROFILE=myprofile \\\n"
+            "  ~/.hermes/profiles/myprofile/plugins/brave-search/"
+            "scripts/install-desktop.sh",
         )
 
 
@@ -114,30 +117,38 @@ def test_after_install_includes_matching_default_and_named_profile_flows() -> No
     text = read(ROOT / "after-install.md")
     assert_in_order(
         text,
-        "HERMES_PROFILE=default",
-        "~/.hermes/plugins/brave-search/scripts/install-desktop.sh",
+        "### Default profile",
         "hermes plugins enable brave-search --allow-tool-override",
         "hermes gateway restart",
+        "## Desktop Brave Search",
+        "~/.hermes/plugins/brave-search/scripts/install-desktop.sh",
     )
     assert_in_order(
         text,
-        "HERMES_PROFILE=myprofile",
-        "~/.hermes/profiles/myprofile/plugins/brave-search/scripts/install-desktop.sh",
+        "### Named profile",
         "hermes --profile myprofile plugins enable ",
         "brave-search --allow-tool-override",
         "hermes --profile myprofile gateway restart",
+        "## Desktop Brave Search",
+        "~/.hermes/profiles/myprofile/plugins/brave-search/scripts/install-desktop.sh",
     )
 
 
 def test_desktop_guidance_keeps_renderer_and_backend_boundaries_explicit() -> None:
-    for path in (ROOT / "README.md", ROOT / "docs" / "installation.md"):
+    for path in (
+        ROOT / "README.md",
+        ROOT / "docs" / "installation.md",
+        ROOT / "after-install.md",
+    ):
         text = read(path)
         assert "desktop-plugins/brave-search" in text
         assert "Settings" in text
         assert "separate" in text.lower()
         assert "active profile" in text.lower()
         assert "remote" in text.lower()
-        assert "does not automatically import" in text.lower()
+        assert "leaves `plugins/brave-search` untouched" in text
+        assert "does not require a gateway restart" in " ".join(text.lower().split())
+        assert "does not automatically import" in " ".join(text.lower().split())
 
 
 def test_desktop_guidance_requires_only_brave_and_keeps_tavily_optional() -> None:
