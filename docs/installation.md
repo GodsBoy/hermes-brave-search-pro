@@ -39,7 +39,7 @@ git clone https://github.com/GodsBoy/hermes-brave-search-pro.git \
   ~/.hermes/profiles/myprofile/plugins/brave-search
 hermes --profile myprofile plugins enable brave-search --allow-tool-override
 hermes --profile myprofile gateway restart
-python ~/.hermes/profiles/myprofile/plugins/brave-search/scripts/doctor.py
+python3 ~/.hermes/profiles/myprofile/plugins/brave-search/scripts/doctor.py
 ```
 
 From an existing checkout, install a symlink:
@@ -53,7 +53,7 @@ hermes gateway restart
 HERMES_PROFILE=myprofile ./scripts/install.sh
 hermes --profile myprofile plugins enable brave-search --allow-tool-override
 hermes --profile myprofile gateway restart
-python ~/.hermes/profiles/myprofile/plugins/brave-search/scripts/doctor.py
+python3 ~/.hermes/profiles/myprofile/plugins/brave-search/scripts/doctor.py
 ```
 
 `./scripts/install.sh` is a development helper that installs both
@@ -105,13 +105,13 @@ The plugin applies safe defaults when Hermes loads it. If Brave is credentialed,
 Run the doctor explicitly to check both sides:
 
 ```bash
-python ~/.hermes/plugins/brave-search/scripts/doctor.py
+python3 ~/.hermes/plugins/brave-search/scripts/doctor.py
 ```
 
 After adding missing keys, apply safe provider defaults:
 
 ```bash
-python ~/.hermes/plugins/brave-search/scripts/doctor.py --fix
+python3 ~/.hermes/plugins/brave-search/scripts/doctor.py --fix
 ```
 
 The interactive Hermes tools flow remains available for visual confirmation:

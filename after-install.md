@@ -96,13 +96,13 @@ The plugin also applies safe Brave Pro backend defaults after Hermes grants its 
 Run the doctor to check the full Brave plus Tavily setup:
 
 ```bash
-python ~/.hermes/plugins/brave-search/scripts/doctor.py
+python3 ~/.hermes/plugins/brave-search/scripts/doctor.py
 ```
 
 After adding missing keys, ask the doctor to apply safe provider defaults:
 
 ```bash
-python ~/.hermes/plugins/brave-search/scripts/doctor.py --fix
+python3 ~/.hermes/plugins/brave-search/scripts/doctor.py --fix
 ```
 
 Manual equivalent:

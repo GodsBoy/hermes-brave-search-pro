@@ -81,7 +81,7 @@ Tavily has a free tier, see [app.tavily.com](https://app.tavily.com/). When Herm
 Verify the setup with the doctor:
 
 ```bash
-python ~/.hermes/plugins/brave-search/scripts/doctor.py
+python3 ~/.hermes/plugins/brave-search/scripts/doctor.py
 ```
 
 It reports what is configured and applies safe defaults with `--fix`. See [Run the doctor](#run-the-doctor) under Troubleshooting for the full check list.
@@ -309,7 +309,7 @@ git clone https://github.com/GodsBoy/hermes-brave-search-pro.git \
   ~/.hermes/profiles/myprofile/plugins/brave-search
 hermes --profile myprofile plugins enable brave-search --allow-tool-override
 hermes --profile myprofile gateway restart
-python ~/.hermes/profiles/myprofile/plugins/brave-search/scripts/doctor.py
+python3 ~/.hermes/profiles/myprofile/plugins/brave-search/scripts/doctor.py
 ```
 
 From an existing checkout, install a symlink:
@@ -323,7 +323,7 @@ hermes gateway restart
 HERMES_PROFILE=myprofile ./scripts/install.sh
 hermes --profile myprofile plugins enable brave-search --allow-tool-override
 hermes --profile myprofile gateway restart
-python ~/.hermes/profiles/myprofile/plugins/brave-search/scripts/doctor.py
+python3 ~/.hermes/profiles/myprofile/plugins/brave-search/scripts/doctor.py
 ```
 
 `./scripts/install.sh` is a development helper that installs both
@@ -351,7 +351,7 @@ The default tests mock Brave HTTP responses. Live API calls are not part of the 
 Use the doctor command when setup does not look right:
 
 ```bash
-python ~/.hermes/plugins/brave-search/scripts/doctor.py
+python3 ~/.hermes/plugins/brave-search/scripts/doctor.py
 ```
 
 It checks:
@@ -367,13 +367,13 @@ It checks:
 After adding missing keys, ask the doctor to apply safe provider defaults:
 
 ```bash
-python ~/.hermes/plugins/brave-search/scripts/doctor.py --fix
+python3 ~/.hermes/plugins/brave-search/scripts/doctor.py --fix
 ```
 
 Use `--force` with care if you intentionally want to overwrite existing web-provider choices:
 
 ```bash
-python ~/.hermes/plugins/brave-search/scripts/doctor.py --fix --force
+python3 ~/.hermes/plugins/brave-search/scripts/doctor.py --fix --force
 ```
 
 ### Hermes cannot see the provider

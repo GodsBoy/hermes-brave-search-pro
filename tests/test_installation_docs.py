@@ -61,7 +61,7 @@ def test_direct_and_profile_guidance_complete_backend_before_optional_desktop() 
             "hermes --profile myprofile plugins enable "
             "brave-search --allow-tool-override",
             "hermes --profile myprofile gateway restart",
-            "python ~/.hermes/profiles/myprofile/plugins/brave-search/"
+            "python3 ~/.hermes/profiles/myprofile/plugins/brave-search/"
             "scripts/doctor.py",
             "## Desktop Brave Search",
             "HERMES_PROFILE=myprofile \\\n"
@@ -160,6 +160,21 @@ def test_desktop_guidance_requires_only_brave_and_keeps_tavily_optional() -> Non
         assert "optional" in desktop_section.lower()
 
 
+def test_static_doctor_guidance_uses_python3() -> None:
+    for path in (
+        ROOT / "README.md",
+        ROOT / "docs" / "installation.md",
+        ROOT / "after-install.md",
+    ):
+        doctor_commands = re.findall(
+            r"^([^\s]+) [^\n]*scripts/doctor\.py(?: [^\n]*)?$",
+            read(path),
+            re.MULTILINE,
+        )
+        assert doctor_commands, path
+        assert set(doctor_commands) == {"python3"}, path
+
+
 def run_installer(home: Path, *, profile: str | None = None) -> str:
     return run_script(home, "install.sh", profile=profile)
 
@@ -236,6 +251,73 @@ def test_symlink_installer_prints_profile_permission_and_restart_flow(
     assert f"backends in {profile_home / 'config.yaml'}" in output
     assert f"HERMES_HOME={profile_home}" in output
     assert f"{profile_home / 'plugins/brave-search/scripts/doctor.py'}" in output
+
+
+def test_symlink_installer_prints_selected_python_for_doctor(
+    tmp_path: Path,
+) -> None:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    python_binary = shutil.which("python3") or shutil.which("python")
+    assert python_binary is not None
+    selected_python = bin_dir / "python3"
+    selected_python.write_text(
+        "#!/bin/sh\n"
+        'if [ "$1" = "-c" ]; then\n'
+        "  exit 0\n"
+        "fi\n"
+        f'exec "{python_binary}" "$@"\n',
+        encoding="utf-8",
+    )
+    selected_python.chmod(0o755)
+
+    output = run_script(
+        tmp_path,
+        "install.sh",
+        extra_env={"PATH": f"{bin_dir}:{os.environ['PATH']}"},
+    )
+
+    assert isinstance(output, str)
+    doctor_path = tmp_path / ".hermes/plugins/brave-search/scripts/doctor.py"
+    expected_doctor_command = (
+        f"HERMES_HOME={tmp_path / '.hermes'} {selected_python} {doctor_path}"
+    )
+    assert expected_doctor_command in output
+
+
+def test_symlink_installer_rejects_unsupported_python_versions(
+    tmp_path: Path,
+) -> None:
+    for version in ("3.10", "3.14"):
+        case_home = tmp_path / version
+        bin_dir = case_home / "bin"
+        bin_dir.mkdir(parents=True)
+
+        for candidate in ("python3", "python"):
+            (bin_dir / candidate).write_text(
+                "#!/bin/sh\n"
+                'if [ "$1" = "-c" ]; then\n'
+                '  case "$2" in\n'
+                '    *"(3, 11)"*"(3, 14)"*) exit 1 ;;\n'
+                "    *) exit 0 ;;\n"
+                "  esac\n"
+                "fi\n"
+                "exit 1\n",
+                encoding="utf-8",
+            )
+            (bin_dir / candidate).chmod(0o755)
+
+        result = run_script(
+            case_home,
+            "install.sh",
+            check=False,
+            extra_env={"PATH": f"{bin_dir}:{os.environ['PATH']}"},
+        )
+
+        assert isinstance(result, subprocess.CompletedProcess)
+        assert result.returncode == 1
+        assert "Python 3.11 through 3.13 is required" in result.stderr
+        assert not (case_home / ".hermes/plugins/brave-search").exists()
 
 
 def test_symlink_installer_links_both_named_profile_surfaces(
