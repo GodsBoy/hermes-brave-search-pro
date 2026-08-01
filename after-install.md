@@ -47,6 +47,23 @@ HERMES_PROFILE=myprofile \
   ~/.hermes/profiles/myprofile/plugins/brave-search/scripts/install-desktop.sh
 ```
 
+### Remote backend with local Desktop
+
+When Desktop connects to a remote backend, clone the renderer source on the
+Desktop machine, rather than assuming the remote backend checkout exists
+locally:
+
+```bash
+git clone https://github.com/GodsBoy/hermes-brave-search-pro.git \
+  ~/hermes-brave-search-desktop
+~/hermes-brave-search-desktop/scripts/install-desktop.sh
+```
+
+Keep this checkout in place. The installer creates a symlink from the selected
+Desktop profile to its `desktop/` directory, so removing the checkout breaks
+the renderer. This flow does not create a local backend link. Deploy, enable,
+and restart the Python backend on the remote active profile separately.
+
 The Desktop-only installer creates the selected profile's
 `desktop-plugins/brave-search` link and leaves `plugins/brave-search` untouched.
 It does not enable the backend, configure credentials, or deploy to a remote
@@ -98,6 +115,10 @@ Run the doctor to check the full Brave plus Tavily setup:
 ```bash
 python3 ~/.hermes/plugins/brave-search/scripts/doctor.py
 ```
+
+These examples use `python3`. If it is unavailable, use the exact interpreter
+printed by `./scripts/install.sh`, or substitute another compatible Python 3.11
+to 3.13 interpreter.
 
 After adding missing keys, ask the doctor to apply safe provider defaults:
 

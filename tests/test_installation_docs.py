@@ -151,6 +151,24 @@ def test_desktop_guidance_keeps_renderer_and_backend_boundaries_explicit() -> No
         assert "does not automatically import" in " ".join(text.lower().split())
 
 
+def test_remote_desktop_guidance_uses_a_persistent_local_renderer_checkout() -> None:
+    for path in (
+        ROOT / "README.md",
+        ROOT / "docs" / "installation.md",
+        ROOT / "after-install.md",
+    ):
+        text = read(path)
+        assert_in_order(
+            text,
+            "Remote backend",
+            "git clone https://github.com/GodsBoy/hermes-brave-search-pro.git \\\n"
+            "  ~/hermes-brave-search-desktop",
+            "~/hermes-brave-search-desktop/scripts/install-desktop.sh",
+            "Keep this checkout",
+        )
+        assert "does not create a local backend link" in text
+
+
 def test_desktop_guidance_requires_only_brave_and_keeps_tavily_optional() -> None:
     for path in (ROOT / "README.md", ROOT / "docs" / "installation.md"):
         text = read(path)
@@ -160,7 +178,7 @@ def test_desktop_guidance_requires_only_brave_and_keeps_tavily_optional() -> Non
         assert "optional" in desktop_section.lower()
 
 
-def test_static_doctor_guidance_uses_python3() -> None:
+def test_static_doctor_guidance_uses_python3_with_installer_fallback() -> None:
     for path in (
         ROOT / "README.md",
         ROOT / "docs" / "installation.md",
@@ -173,6 +191,10 @@ def test_static_doctor_guidance_uses_python3() -> None:
         )
         assert doctor_commands, path
         assert set(doctor_commands) == {"python3"}, path
+        assert (
+            "exact interpreter printed by `./scripts/install.sh`"
+            in " ".join(read(path).split())
+        )
 
 
 def run_installer(home: Path, *, profile: str | None = None) -> str:
@@ -283,7 +305,7 @@ def test_symlink_installer_prints_selected_python_for_doctor(
     write_fake_python(
         selected_python,
         real_python=python_binary,
-        version=(3, 11),
+        version=(3, 13),
     )
 
     output = run_script(
@@ -298,6 +320,42 @@ def test_symlink_installer_prints_selected_python_for_doctor(
         f"HERMES_HOME={tmp_path / '.hermes'} {selected_python} {doctor_path}"
     )
     assert expected_doctor_command in output
+
+
+def test_symlink_installer_falls_back_to_python_when_python3_is_unsupported(
+    tmp_path: Path,
+) -> None:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    python_binary = shutil.which("python3") or shutil.which("python")
+    assert python_binary is not None
+
+    rejected_python3 = bin_dir / "python3"
+    selected_python = bin_dir / "python"
+    write_fake_python(
+        rejected_python3,
+        real_python=python_binary,
+        version=(3, 10),
+    )
+    write_fake_python(
+        selected_python,
+        real_python=python_binary,
+        version=(3, 13),
+    )
+
+    output = run_script(
+        tmp_path,
+        "install.sh",
+        extra_env={"PATH": f"{bin_dir}:{os.environ['PATH']}"},
+    )
+
+    assert isinstance(output, str)
+    doctor_path = tmp_path / ".hermes/plugins/brave-search/scripts/doctor.py"
+    expected_doctor_command = (
+        f"HERMES_HOME={tmp_path / '.hermes'} {selected_python} {doctor_path}"
+    )
+    assert expected_doctor_command in output
+    assert str(rejected_python3) not in output
 
 
 def test_symlink_installer_rejects_unsupported_python_versions(

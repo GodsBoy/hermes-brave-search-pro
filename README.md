@@ -84,6 +84,10 @@ Verify the setup with the doctor:
 python3 ~/.hermes/plugins/brave-search/scripts/doctor.py
 ```
 
+These examples use `python3`. If it is unavailable, use the exact interpreter
+printed by `./scripts/install.sh`, or substitute another compatible Python 3.11
+to 3.13 interpreter.
+
 It reports what is configured and applies safe defaults with `--fix`. See [Run the doctor](#run-the-doctor) under Troubleshooting for the full check list.
 
 Then use the clean pairing:
@@ -354,6 +358,10 @@ Use the doctor command when setup does not look right:
 python3 ~/.hermes/plugins/brave-search/scripts/doctor.py
 ```
 
+These examples use `python3`. If it is unavailable, use the exact interpreter
+printed by `./scripts/install.sh`, or substitute another compatible Python 3.11
+to 3.13 interpreter.
+
 It checks:
 
 - `BRAVE_SEARCH_API_KEY` or compatibility fallback `BRAVE_API_KEY`
@@ -445,6 +453,23 @@ For a named local profile, use that profile for the renderer path and installer:
 HERMES_PROFILE=myprofile \
   ~/.hermes/profiles/myprofile/plugins/brave-search/scripts/install-desktop.sh
 ```
+
+### Remote backend with local Desktop
+
+When Desktop connects to a remote backend, clone the renderer source on the
+Desktop machine, rather than assuming the remote backend checkout exists
+locally:
+
+```bash
+git clone https://github.com/GodsBoy/hermes-brave-search-pro.git \
+  ~/hermes-brave-search-desktop
+~/hermes-brave-search-desktop/scripts/install-desktop.sh
+```
+
+Keep this checkout in place. The installer creates a symlink from the selected
+Desktop profile to its `desktop/` directory, so removing the checkout breaks
+the renderer. This flow does not create a local backend link. Deploy, enable,
+and restart the Python backend on the remote active profile separately.
 
 The Desktop-only installer creates the selected profile's
 `desktop-plugins/brave-search` link and leaves `plugins/brave-search` untouched.
