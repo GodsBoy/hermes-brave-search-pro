@@ -38,7 +38,7 @@ for python_candidate in python3 python; do
   if command -v "$python_candidate" >/dev/null 2>&1; then
     candidate_path="$(command -v "$python_candidate")"
     if "$candidate_path" -c \
-      'import sys; raise SystemExit(sys.version_info < (3, 6))' \
+      'import sys; raise SystemExit(not ((3, 11) <= sys.version_info < (3, 14)))' \
       >/dev/null 2>&1; then
       PYTHON="$candidate_path"
       break
@@ -46,7 +46,7 @@ for python_candidate in python3 python; do
   fi
 done
 if [[ -z "$PYTHON" ]]; then
-  echo "Python 3.6 or newer is required to install Brave Search Pro." >&2
+  echo "Python 3.11 through 3.13 is required to install Brave Search Pro." >&2
   exit 1
 fi
 
@@ -212,5 +212,5 @@ And set search/extract backends in $CONFIG_PATH:
 
 Run the profile-scoped doctor:
 EOF
-printf '  HERMES_HOME=%q python %q\n' \
-  "$HERMES_BASE" "$BACKEND_TARGET_DIR/scripts/doctor.py"
+printf '  HERMES_HOME=%q %q %q\n' \
+  "$HERMES_BASE" "$PYTHON" "$BACKEND_TARGET_DIR/scripts/doctor.py"

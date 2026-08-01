@@ -50,12 +50,14 @@ Canonical Hermes install:
 
 ```bash
 hermes plugins install GodsBoy/hermes-brave-search-pro --no-enable
-~/.hermes/plugins/brave-search/scripts/install-desktop.sh
 hermes plugins enable brave-search --allow-tool-override
 hermes gateway restart
 ```
 
-The plugin intentionally overrides Hermes' built-in `brave_search` tool, so install it disabled, install the separate Desktop surface, grant the explicit override permission, and restart the gateway before using it. After the restart, open Hermes Desktop Settings and enable Brave Search.
+The plugin intentionally overrides Hermes' built-in `brave_search` tool, so
+install it disabled, grant the explicit override permission, and restart the
+gateway before using it. This backend-only path works on a VPS and does not
+require Hermes Desktop.
 
 During install, Hermes prompts for the plugin's required credential:
 
@@ -79,8 +81,12 @@ Tavily has a free tier, see [app.tavily.com](https://app.tavily.com/). When Herm
 Verify the setup with the doctor:
 
 ```bash
-python ~/.hermes/plugins/brave-search/scripts/doctor.py
+python3 ~/.hermes/plugins/brave-search/scripts/doctor.py
 ```
+
+These examples use `python3`. If it is unavailable, use the exact interpreter
+printed by `./scripts/install.sh`, or substitute another compatible Python 3.11
+to 3.13 interpreter.
 
 It reports what is configured and applies safe defaults with `--fix`. See [Run the doctor](#run-the-doctor) under Troubleshooting for the full check list.
 
@@ -281,7 +287,6 @@ Canonical Hermes install:
 
 ```bash
 hermes plugins install GodsBoy/hermes-brave-search-pro --no-enable
-~/.hermes/plugins/brave-search/scripts/install-desktop.sh
 hermes plugins enable brave-search --allow-tool-override
 hermes gateway restart
 ```
@@ -297,7 +302,6 @@ Direct user-plugin install:
 ```bash
 git clone https://github.com/GodsBoy/hermes-brave-search-pro.git \
   ~/.hermes/plugins/brave-search
-~/.hermes/plugins/brave-search/scripts/install-desktop.sh
 hermes plugins enable brave-search --allow-tool-override
 hermes gateway restart
 ```
@@ -307,11 +311,9 @@ Profile-specific install:
 ```bash
 git clone https://github.com/GodsBoy/hermes-brave-search-pro.git \
   ~/.hermes/profiles/myprofile/plugins/brave-search
-HERMES_PROFILE=myprofile \
-  ~/.hermes/profiles/myprofile/plugins/brave-search/scripts/install-desktop.sh
 hermes --profile myprofile plugins enable brave-search --allow-tool-override
 hermes --profile myprofile gateway restart
-python ~/.hermes/profiles/myprofile/plugins/brave-search/scripts/doctor.py
+python3 ~/.hermes/profiles/myprofile/plugins/brave-search/scripts/doctor.py
 ```
 
 From an existing checkout, install a symlink:
@@ -325,13 +327,13 @@ hermes gateway restart
 HERMES_PROFILE=myprofile ./scripts/install.sh
 hermes --profile myprofile plugins enable brave-search --allow-tool-override
 hermes --profile myprofile gateway restart
-python ~/.hermes/profiles/myprofile/plugins/brave-search/scripts/doctor.py
+python3 ~/.hermes/profiles/myprofile/plugins/brave-search/scripts/doctor.py
 ```
 
-`./scripts/install.sh` installs both profile-scoped links. It checks both
-destinations before creating either link, and refuses to replace an existing
-file, directory, or different symlink. After the gateway restarts, enable Brave
-Search in Hermes Desktop Settings.
+`./scripts/install.sh` is a development helper that installs both
+profile-scoped links. It checks both destinations before creating either link,
+and refuses to replace an existing file, directory, or different symlink. Use
+the plugin-manager or direct-install flows above when you only need the backend.
 
 For development only:
 
@@ -353,8 +355,12 @@ The default tests mock Brave HTTP responses. Live API calls are not part of the 
 Use the doctor command when setup does not look right:
 
 ```bash
-python ~/.hermes/plugins/brave-search/scripts/doctor.py
+python3 ~/.hermes/plugins/brave-search/scripts/doctor.py
 ```
+
+These examples use `python3`. If it is unavailable, use the exact interpreter
+printed by `./scripts/install.sh`, or substitute another compatible Python 3.11
+to 3.13 interpreter.
 
 It checks:
 
@@ -369,13 +375,13 @@ It checks:
 After adding missing keys, ask the doctor to apply safe provider defaults:
 
 ```bash
-python ~/.hermes/plugins/brave-search/scripts/doctor.py --fix
+python3 ~/.hermes/plugins/brave-search/scripts/doctor.py --fix
 ```
 
 Use `--force` with care if you intentionally want to overwrite existing web-provider choices:
 
 ```bash
-python ~/.hermes/plugins/brave-search/scripts/doctor.py --fix --force
+python3 ~/.hermes/plugins/brave-search/scripts/doctor.py --fix --force
 ```
 
 ### Hermes cannot see the provider
@@ -429,17 +435,64 @@ Do not rely on `web.backend` for this pairing because that single fallback appli
 
 ## Desktop Brave Search
 
-The Desktop page is a separate, disabled-by-default plugin. Its files live in
-the selected local profile at `desktop-plugins/brave-search`, while the Python
-backend lives at `plugins/brave-search`. Install the backend or checkout first,
-install the Desktop surface, enable the backend with `--allow-tool-override`,
-restart the gateway, then enable Brave Search in Hermes Desktop Settings.
+The Desktop page is an optional, disabled-by-default add-on. Complete one of
+the backend installation flows above first when you need Brave search on the
+active gateway. Desktop files live only in the selected local profile at
+`desktop-plugins/brave-search`, while the Python backend lives at
+`plugins/brave-search`.
+
+For the default local profile, install the renderer after the backend is ready:
+
+```bash
+~/.hermes/plugins/brave-search/scripts/install-desktop.sh
+```
+
+For a named local profile, use that profile for the renderer path and installer:
+
+```bash
+HERMES_PROFILE=myprofile \
+  ~/.hermes/profiles/myprofile/plugins/brave-search/scripts/install-desktop.sh
+```
+
+### Remote backend with local Desktop
+
+When Desktop connects to a remote backend, clone the renderer source on the
+Desktop machine, rather than assuming the remote backend checkout exists
+locally:
+
+```bash
+git clone https://github.com/GodsBoy/hermes-brave-search-pro.git \
+  ~/hermes-brave-search-desktop
+~/hermes-brave-search-desktop/scripts/install-desktop.sh
+```
+
+For a named local profile, run:
+
+```bash
+HERMES_PROFILE=myprofile \
+  ~/hermes-brave-search-desktop/scripts/install-desktop.sh
+```
+
+Keep this checkout in place. The installer creates a symlink from the selected
+Desktop profile to its `desktop/` directory, so removing the checkout breaks
+the renderer. This flow does not create a local backend link. Deploy, enable,
+and restart the Python backend on the remote active profile separately.
+
+The Desktop-only installer creates the selected profile's
+`desktop-plugins/brave-search` link and leaves `plugins/brave-search` untouched.
+It does not enable the backend, configure credentials, or deploy anything to a
+remote gateway. Enable Brave Search separately in Hermes Desktop Settings. That
+Settings toggle controls only the renderer and does not require a gateway
+restart.
 
 Desktop uses the active profile's plugin API. Switching profiles can therefore
-show an unavailable backend until that profile has its own enabled backend,
-Brave credential, and gateway restart. For a remote backend, deploy and enable
-the Python plugin on the remote active profile separately; installing the local
-Desktop surface does not copy it there. Loading a Desktop plugin does not automatically import a project Python plugin into the gateway.
+show an unavailable backend until that profile has its own current, enabled,
+credentialed Python backend. If Desktop connects to a remote backend, install
+the renderer locally, then deploy or update the Python plugin on the remote
+active profile, enable it with `--allow-tool-override`, and restart that remote
+gateway after its backend route changes. Installing the local Desktop surface
+does not copy the backend there. Loading a Desktop plugin does not automatically
+import a project Python plugin into the gateway.
 
 Brave Desktop search requires only `BRAVE_SEARCH_API_KEY`. Tavily remains an
 optional, separate extraction integration.

@@ -29,41 +29,44 @@ def assert_in_order(text: str, *fragments: str) -> None:
         position = next_position
 
 
-def test_fresh_install_guidance_grants_override_before_restart() -> None:
+def test_fresh_install_guidance_completes_backend_before_optional_desktop() -> None:
     for path in (ROOT / "README.md", ROOT / "docs" / "installation.md"):
         text = read(path)
         assert_in_order(
             text,
             "hermes plugins install GodsBoy/hermes-brave-search-pro --no-enable",
-            "scripts/install-desktop.sh",
             "hermes plugins enable brave-search --allow-tool-override",
             "hermes gateway restart",
+            "## Desktop Brave Search",
+            "scripts/install-desktop.sh",
         )
 
 
-def test_direct_and_profile_guidance_grants_override_before_restart() -> None:
+def test_direct_and_profile_guidance_complete_backend_before_optional_desktop() -> None:
     for path in (ROOT / "README.md", ROOT / "docs" / "installation.md"):
         text = read(path)
         assert_in_order(
             text,
             "git clone https://github.com/GodsBoy/hermes-brave-search-pro.git \\\n"
             "  ~/.hermes/plugins/brave-search",
-            "~/.hermes/plugins/brave-search/scripts/install-desktop.sh",
             "hermes plugins enable brave-search --allow-tool-override",
             "hermes gateway restart",
+            "## Desktop Brave Search",
+            "~/.hermes/plugins/brave-search/scripts/install-desktop.sh",
         )
         assert_in_order(
             text,
             "git clone https://github.com/GodsBoy/hermes-brave-search-pro.git \\\n"
             "  ~/.hermes/profiles/myprofile/plugins/brave-search",
-            "HERMES_PROFILE=myprofile \\\n"
-            "  ~/.hermes/profiles/myprofile/plugins/brave-search/"
-            "scripts/install-desktop.sh",
             "hermes --profile myprofile plugins enable "
             "brave-search --allow-tool-override",
             "hermes --profile myprofile gateway restart",
-            "python ~/.hermes/profiles/myprofile/plugins/brave-search/"
+            "python3 ~/.hermes/profiles/myprofile/plugins/brave-search/"
             "scripts/doctor.py",
+            "## Desktop Brave Search",
+            "HERMES_PROFILE=myprofile \\\n"
+            "  ~/.hermes/profiles/myprofile/plugins/brave-search/"
+            "scripts/install-desktop.sh",
         )
 
 
@@ -114,30 +117,58 @@ def test_after_install_includes_matching_default_and_named_profile_flows() -> No
     text = read(ROOT / "after-install.md")
     assert_in_order(
         text,
-        "HERMES_PROFILE=default",
-        "~/.hermes/plugins/brave-search/scripts/install-desktop.sh",
+        "### Default profile",
         "hermes plugins enable brave-search --allow-tool-override",
         "hermes gateway restart",
+        "## Desktop Brave Search",
+        "~/.hermes/plugins/brave-search/scripts/install-desktop.sh",
     )
     assert_in_order(
         text,
-        "HERMES_PROFILE=myprofile",
-        "~/.hermes/profiles/myprofile/plugins/brave-search/scripts/install-desktop.sh",
+        "### Named profile",
         "hermes --profile myprofile plugins enable ",
         "brave-search --allow-tool-override",
         "hermes --profile myprofile gateway restart",
+        "## Desktop Brave Search",
+        "~/.hermes/profiles/myprofile/plugins/brave-search/scripts/install-desktop.sh",
     )
 
 
 def test_desktop_guidance_keeps_renderer_and_backend_boundaries_explicit() -> None:
-    for path in (ROOT / "README.md", ROOT / "docs" / "installation.md"):
+    for path in (
+        ROOT / "README.md",
+        ROOT / "docs" / "installation.md",
+        ROOT / "after-install.md",
+    ):
         text = read(path)
         assert "desktop-plugins/brave-search" in text
         assert "Settings" in text
         assert "separate" in text.lower()
         assert "active profile" in text.lower()
         assert "remote" in text.lower()
-        assert "does not automatically import" in text.lower()
+        assert "leaves `plugins/brave-search` untouched" in text
+        assert "does not require a gateway restart" in " ".join(text.lower().split())
+        assert "does not automatically import" in " ".join(text.lower().split())
+
+
+def test_remote_desktop_guidance_uses_a_persistent_local_renderer_checkout() -> None:
+    for path in (
+        ROOT / "README.md",
+        ROOT / "docs" / "installation.md",
+        ROOT / "after-install.md",
+    ):
+        text = read(path)
+        assert_in_order(
+            text,
+            "Remote backend",
+            "git clone https://github.com/GodsBoy/hermes-brave-search-pro.git \\\n"
+            "  ~/hermes-brave-search-desktop",
+            "~/hermes-brave-search-desktop/scripts/install-desktop.sh",
+            "HERMES_PROFILE=myprofile \\\n"
+            "  ~/hermes-brave-search-desktop/scripts/install-desktop.sh",
+            "Keep this checkout",
+        )
+        assert "does not create a local backend link" in text
 
 
 def test_desktop_guidance_requires_only_brave_and_keeps_tavily_optional() -> None:
@@ -147,6 +178,25 @@ def test_desktop_guidance_requires_only_brave_and_keeps_tavily_optional() -> Non
         assert "BRAVE_SEARCH_API_KEY" in desktop_section
         assert "TAVILY_API_KEY" not in desktop_section
         assert "optional" in desktop_section.lower()
+
+
+def test_static_doctor_guidance_uses_python3_with_installer_fallback() -> None:
+    for path in (
+        ROOT / "README.md",
+        ROOT / "docs" / "installation.md",
+        ROOT / "after-install.md",
+    ):
+        doctor_commands = re.findall(
+            r"^([^\s]+) [^\n]*scripts/doctor\.py(?: [^\n]*)?$",
+            read(path),
+            re.MULTILINE,
+        )
+        assert doctor_commands, path
+        assert set(doctor_commands) == {"python3"}, path
+        assert (
+            "exact interpreter printed by `./scripts/install.sh`"
+            in " ".join(read(path).split())
+        )
 
 
 def run_installer(home: Path, *, profile: str | None = None) -> str:
@@ -180,6 +230,25 @@ def run_script(
     if check:
         return result.stdout
     return result
+
+
+def write_fake_python(
+    path: Path,
+    *,
+    real_python: str,
+    version: tuple[int, int],
+) -> None:
+    path.write_text(
+        f"#!{real_python}\n"
+        "import os\n"
+        "import sys\n"
+        'if sys.argv[1:2] == ["-c"]:\n'
+        f"    code = sys.argv[2].replace(\"sys.version_info\", {str(version)!r})\n"
+        '    exec(compile(code, "<installer-probe>", "exec"))\n'
+        f"os.execv({real_python!r}, [{real_python!r}, *sys.argv[1:]])\n",
+        encoding="utf-8",
+    )
+    path.chmod(0o755)
 
 
 def test_symlink_installer_prints_default_permission_and_restart_flow(
@@ -225,6 +294,101 @@ def test_symlink_installer_prints_profile_permission_and_restart_flow(
     assert f"backends in {profile_home / 'config.yaml'}" in output
     assert f"HERMES_HOME={profile_home}" in output
     assert f"{profile_home / 'plugins/brave-search/scripts/doctor.py'}" in output
+
+
+def test_symlink_installer_prints_selected_python_for_doctor(
+    tmp_path: Path,
+) -> None:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    python_binary = shutil.which("python3") or shutil.which("python")
+    assert python_binary is not None
+    selected_python = bin_dir / "python3"
+    write_fake_python(
+        selected_python,
+        real_python=python_binary,
+        version=(3, 13),
+    )
+
+    output = run_script(
+        tmp_path,
+        "install.sh",
+        extra_env={"PATH": f"{bin_dir}:{os.environ['PATH']}"},
+    )
+
+    assert isinstance(output, str)
+    doctor_path = tmp_path / ".hermes/plugins/brave-search/scripts/doctor.py"
+    expected_doctor_command = (
+        f"HERMES_HOME={tmp_path / '.hermes'} {selected_python} {doctor_path}"
+    )
+    assert expected_doctor_command in output
+
+
+def test_symlink_installer_falls_back_to_python_when_python3_is_unsupported(
+    tmp_path: Path,
+) -> None:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    python_binary = shutil.which("python3") or shutil.which("python")
+    assert python_binary is not None
+
+    rejected_python3 = bin_dir / "python3"
+    selected_python = bin_dir / "python"
+    write_fake_python(
+        rejected_python3,
+        real_python=python_binary,
+        version=(3, 10),
+    )
+    write_fake_python(
+        selected_python,
+        real_python=python_binary,
+        version=(3, 13),
+    )
+
+    output = run_script(
+        tmp_path,
+        "install.sh",
+        extra_env={"PATH": f"{bin_dir}:{os.environ['PATH']}"},
+    )
+
+    assert isinstance(output, str)
+    doctor_path = tmp_path / ".hermes/plugins/brave-search/scripts/doctor.py"
+    expected_doctor_command = (
+        f"HERMES_HOME={tmp_path / '.hermes'} {selected_python} {doctor_path}"
+    )
+    assert expected_doctor_command in output
+    assert str(rejected_python3) not in output
+
+
+def test_symlink_installer_rejects_unsupported_python_versions(
+    tmp_path: Path,
+) -> None:
+    python_binary = shutil.which("python3") or shutil.which("python")
+    assert python_binary is not None
+
+    for version in ((3, 10), (3, 14)):
+        case_home = tmp_path / ".".join(map(str, version))
+        bin_dir = case_home / "bin"
+        bin_dir.mkdir(parents=True)
+
+        for candidate in ("python3", "python"):
+            write_fake_python(
+                bin_dir / candidate,
+                real_python=python_binary,
+                version=version,
+            )
+
+        result = run_script(
+            case_home,
+            "install.sh",
+            check=False,
+            extra_env={"PATH": f"{bin_dir}:{os.environ['PATH']}"},
+        )
+
+        assert isinstance(result, subprocess.CompletedProcess)
+        assert result.returncode == 1
+        assert "Python 3.11 through 3.13 is required" in result.stderr
+        assert not (case_home / ".hermes/plugins/brave-search").exists()
 
 
 def test_symlink_installer_links_both_named_profile_surfaces(
