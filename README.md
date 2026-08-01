@@ -1,11 +1,7 @@
 # Brave Search Pro for Hermes Agent
 
 <p align="center">
-  <img src="docs/assets/hermes-brave-search-pro-banner.png" alt="Hermes Brave Search Pro banner" width="920">
-</p>
-
-<p align="center">
-  <img src="docs/assets/brave-hermes-hero.png" alt="Brave Search Pro for Hermes Agent infographic" width="920">
+  <img src="docs/assets/hermes-brave-search-pro-banner.png" alt="Brave Search Pro for Hermes Agent" width="920">
 </p>
 
 <p align="center">
@@ -15,38 +11,27 @@
   <img alt="Brave Search Pro" src="https://img.shields.io/badge/Brave-Search%20Pro-FF5A1F.svg">
 </p>
 
-Brave Search Pro as a first-class Hermes Agent plugin.
+Use Brave Search Pro as the `web_search` backend in [Hermes Agent](https://github.com/NousResearch/hermes-agent). The plugin also adds an explicit `brave_search` tool for Brave's LLM Context API, Place Search, media, news, discussions and raw API responses.
 
-Brave handles fast, index-backed discovery for `web_search`, and the explicit `brave_search` tool adds Brave-specific modes plus dedicated Brave LLM Context API chunks and Brave Place Search API support when you want richer agent context. Tavily-backed `web_extract` remains a separate optional Hermes plugin pairing.
+Brave handles discovery. Extraction remains separate, so you can pair it with Hermes' bundled `web-tavily` plugin for `web_extract`.
 
-## Why this exists
+## Contents
 
-Hermes already separates search from extraction. This plugin leans into that design:
-
-- **Discovery:** `web_search` uses Brave Search Pro through the `brave-pro` backend.
-- **Extraction:** `web_extract` can stay on Tavily when Hermes' bundled `web-tavily` plugin is enabled and `web.extract_backend` is set to `tavily`.
-- **Query context:** `brave_search(mode="llm")` and `brave_search(mode="context")` call Brave's dedicated `/res/v1/llm/context` endpoint.
-- **Place search:** `brave_search(mode="place")` and `brave_search(mode="local")` call Brave's `/res/v1/local/place_search` endpoint, with follow-up POI detail modes for `/pois` and `/descriptions`.
-- **Advanced search:** `brave_search` exposes Brave modes that do not fit the standard `web_search` contract.
-- **Hermes-owned provider picker:** current Hermes owns provider visibility, and the plugin applies safe explicit backend defaults for Brave Pro.
-
-## Features
-
-- Hermes web-search provider named `brave-pro`
-- Safe runtime defaults that prefer Brave Pro over Brave Free when both share the same Brave API key
-- Advanced Hermes tool named `brave_search`
-- Dedicated Brave LLM Context API support for query-to-context chunks
-- Context controls for freshness, country, language, Goggles, local recall, source metadata, snippets, and token budgets
-- Brave Place Search API modes for places, local Explore Mode, POI details, and POI descriptions
-- Bounded retry handling for transient Brave API failures
-- Search-only provider so extraction stays on a dedicated backend such as Hermes' bundled `web-tavily`
-- Shared Brave client with structured errors and response normalisation
-- Mocked test suite that does not require live Brave credentials
-- Public-ready docs, examples, and visual explanation
+- [Quick start](#quick-start)
+- [What the plugin provides](#what-the-plugin-provides)
+- [Use it](#use-it)
+- [How search and extraction fit together](#how-search-and-extraction-fit-together)
+- [Advanced Brave modes](#advanced-brave-modes)
+- [Configuration](#configuration)
+- [Installation options](#installation-options)
+- [Desktop Brave Search](#desktop-brave-search)
+- [Troubleshooting](#troubleshooting)
+- [Development](#development)
+- [References](#references)
 
 ## Quick start
 
-Canonical Hermes install:
+Install the backend without enabling it, then grant the required built-in tool override permission:
 
 ```bash
 hermes plugins install GodsBoy/hermes-brave-search-pro --no-enable
@@ -54,79 +39,26 @@ hermes plugins enable brave-search --allow-tool-override
 hermes gateway restart
 ```
 
-The plugin intentionally overrides Hermes' built-in `brave_search` tool, so
-install it disabled, grant the explicit override permission, and restart the
-gateway before using it. This backend-only path works on a VPS and does not
-require Hermes Desktop.
-
-During install, Hermes prompts for the plugin's required credential:
-
-- `BRAVE_SEARCH_API_KEY` for Brave-backed search
-
-If you skipped the prompt, export it in the environment Hermes runs with:
+The installer prompts for `BRAVE_SEARCH_API_KEY`. If you skipped the prompt, add the key to the environment used by Hermes, commonly `~/.hermes/.env` for a gateway installation:
 
 ```bash
-export BRAVE_SEARCH_API_KEY=bsa-your-key-here
+BRAVE_SEARCH_API_KEY=bsa-your-key-here
 ```
 
-Brave Search Pro is search-only by design, so this plugin does not provide `web_extract`. If you want Tavily-backed extraction, enable Hermes' bundled Tavily plugin separately, add `TAVILY_API_KEY`, and point extraction at Tavily:
+Then select Brave Pro explicitly:
 
 ```bash
-hermes plugins enable web-tavily
-hermes config set web.extract_backend tavily
-```
-
-Tavily has a free tier, see [app.tavily.com](https://app.tavily.com/). When Hermes loads this plugin it applies safe defaults: Brave Pro for `web_search` when Brave is credentialed, and `web.extract_backend = tavily` when a Tavily key is present and no extraction provider is already selected. The separate `web-tavily` plugin still needs to be enabled for Tavily `web_extract` to run.
-
-Verify the setup with the doctor:
-
-```bash
-python3 ~/.hermes/plugins/brave-search/scripts/doctor.py
-```
-
-These examples use `python3`. If it is unavailable, use the exact interpreter
-printed by `./scripts/install.sh`, or substitute another compatible Python 3.11
-to 3.13 interpreter.
-
-It reports what is configured and applies safe defaults with `--fix`. See [Run the doctor](#run-the-doctor) under Troubleshooting for the full check list.
-
-Then use the clean pairing:
-
-```python
-web_search(query="Hermes Agent plugins", limit=5)   # Brave Search Pro
-web_extract(urls=["https://example.com/article"])  # Tavily
-brave_search(query="Hermes Agent", mode="news")   # Brave-specific mode
-brave_search(query="Hermes Agent", mode="context")  # Brave LLM Context API
-brave_search(query="coffee shops", mode="place", location="Cape Town South Africa")
-```
-
-Restart the gateway after installing or changing plugin configuration:
-
-```bash
+hermes config set web.backend brave-pro
+hermes config set web.search_backend brave-pro
 hermes gateway restart
 ```
 
-## Verify the provider
-
-To confirm the active provider visually:
+Verify the installation:
 
 ```bash
+python3 ~/.hermes/plugins/brave-search/scripts/doctor.py
 hermes tools
 ```
-
-In the interactive menu, choose **Reconfigure an existing tool's provider or API key**, then **Web Search & Scraping**. The search provider should show **Brave Search Pro [pro]** as active. Tavily is an extraction backend, so make sure `web-tavily` is enabled and `TAVILY_API_KEY` is present before expecting Tavily-backed `web_extract` to work.
-
-<p align="center">
-  <img src="docs/assets/hermes-tools-reconfigure-provider.jpg" alt="Hermes tools menu with Reconfigure an existing tool's provider or API key selected" width="760">
-</p>
-
-<p align="center">
-  <img src="docs/assets/hermes-tools-web-search-scraping.jpg" alt="Hermes tools menu with Web Search and Scraping selected" width="760">
-</p>
-
-<p align="center">
-  <img src="docs/assets/hermes-tools-brave-pro-provider.jpg" alt="Hermes provider menu showing Brave Search Pro as an active provider option" width="920">
-</p>
 
 The provider should appear as:
 
@@ -134,15 +66,94 @@ The provider should appear as:
 Brave Search Pro [pro] - Brave-backed discovery for Hermes web_search. Pair with Tavily for web_extract.
 ```
 
-## Manual configuration
+## What the plugin provides
 
-The plugin sets safe defaults automatically, but you can configure the pairing explicitly. In your `hermes` config:
+- A Hermes web-search provider named `brave-pro`
+- An advanced Hermes tool named `brave_search`
+- Brave LLM Context API chunks through `/res/v1/llm/context`
+- Brave Place Search, local Explore Mode, POI details and POI descriptions
+- Image, news, video, discussion and suggestion search modes
+- Bounded retries for transient Brave API failures
+- Safe backend defaults that prefer Brave Pro over Brave Free when both use the same API key
+- A shared Brave client with structured errors and normalised responses
+- An optional Hermes Desktop page
+
+The plugin intentionally overrides Hermes' built-in `brave_search` tool. Hermes therefore requires `--allow-tool-override` when the plugin is enabled.
+
+## Use it
+
+The standard Hermes tools keep their normal contracts:
+
+```python
+web_search(query="Hermes Agent plugins", limit=5)   # Brave Search Pro
+web_extract(urls=["https://example.com/article"])  # Your configured extract backend
+```
+
+Use `brave_search` when you need a Brave-specific capability:
+
+```python
+brave_search(query="Hermes Agent", mode="news")
+brave_search(query="Hermes Agent", mode="context")
+brave_search(query="coffee shops", mode="place", location="Cape Town South Africa")
+brave_search(mode="pois", ids=["temporary-poi-id-from-place-result"])
+```
+
+## How search and extraction fit together
+
+Hermes configures search and extraction independently:
+
+| Capability | Recommended provider | Config key |
+| --- | --- | --- |
+| `web_search` | Brave Search Pro | `web.search_backend` |
+| `web_extract` | Tavily or another extraction provider | `web.extract_backend` |
+| Brave-specific retrieval | `brave_search` tool | Plugin tool |
+
+This plugin does not implement `web_extract`. To use Tavily for extraction:
+
+```bash
+hermes plugins enable web-tavily
+hermes config set web.extract_backend tavily
+hermes gateway restart
+```
+
+Add `TAVILY_API_KEY` to the Hermes environment before expecting Tavily-backed extraction to work. Tavily is optional and is not a requirement for Brave search or the Desktop page.
+
+## Advanced Brave modes
+
+| Mode | Purpose |
+| --- | --- |
+| `both` | Web results plus LLM Context API chunks |
+| `web` | Standard Brave web results |
+| `llm`, `context` | Dedicated LLM Context API chunks |
+| `images`, `news`, `videos` | Media and news search |
+| `discussions` | Discussion-focused web results |
+| `suggest` | Query suggestions |
+| `place`, `local` | Place Search and local Explore Mode |
+| `pois` | Follow-up details for temporary POI IDs |
+| `descriptions` | Follow-up descriptions for temporary POI IDs |
+| `raw` | Raw Brave API payload |
+
+`mode="both"` makes a web-search request and a separate LLM Context request. If the context request fails, web results are still returned with an `llm_context_error` field.
+
+Place Search uses `count` for up to 100 results. `pois` and `descriptions` accept temporary POI IDs returned by Place Search; Brave says those IDs expire after approximately eight hours.
+
+See [Advanced modes](docs/installation.md#advanced-modes) for context budgets, locale controls, Goggles, local recall, coordinates, POI options and complete examples.
+
+## Configuration
+
+The plugin applies conservative defaults when it loads:
+
+- Missing search settings, or settings still using `brave-free`, move to `brave-pro` when Brave is credentialed.
+- `web.extract_backend` moves to `tavily` only when Tavily is credentialed and no extraction backend is selected.
+- The bundled `web-tavily` plugin must still be enabled for Tavily extraction.
+
+Explicit configuration:
 
 ```yaml
 plugins:
   enabled:
     - brave-search
-    - web-tavily  # optional, only needed for Tavily web_extract
+    - web-tavily  # optional
   entries:
     brave-search:
       allow_tool_override: true
@@ -153,151 +164,25 @@ web:
   extract_backend: "tavily"
 ```
 
-Or set those keys directly:
+Equivalent commands:
 
 ```bash
 hermes config set web.backend brave-pro
 hermes config set web.search_backend brave-pro
-hermes plugins enable web-tavily  # optional, only needed for Tavily web_extract
+hermes plugins enable web-tavily  # optional
 hermes config set web.extract_backend tavily
 ```
 
-That gives you the clean pairing:
+## Installation options
 
-```python
-web_search(query="Hermes Agent plugins", limit=5)   # Brave Search Pro
-web_extract(urls=["https://example.com/article"])  # Tavily
-brave_search(query="Hermes Agent", mode="news")   # Brave-specific mode
-brave_search(query="Hermes Agent", mode="context")  # Brave LLM Context API
-brave_search(query="coffee shops", mode="place", location="Cape Town South Africa")
-```
-
-## Advanced `brave_search` modes
-
-`brave_search` accepts:
-
-- `both`: Brave web results plus dedicated LLM Context API chunks
-- `web`: standard Brave web results
-- `llm`: Brave LLM Context API chunks from `/res/v1/llm/context`
-- `context`: alias for `llm`, useful when you want the dedicated context endpoint explicitly
-- `images`: image search
-- `news`: news search
-- `videos`: video search
-- `discussions`: discussion-focused results
-- `suggest`: query suggestions
-- `place`: Brave Place Search through `/res/v1/local/place_search`
-- `local`: alias for `place`, including Explore Mode when no query is supplied
-- `pois`: follow-up POI details from `/res/v1/local/pois`
-- `descriptions`: follow-up POI descriptions from `/res/v1/local/descriptions`
-- `raw`: raw Brave API payload for debugging and exploration
-
-Example:
-
-```python
-brave_search(query="Hermes Agent plugin system", mode="both", limit=5)
-brave_search(
-    query="Hermes Agent plugin system",
-    mode="context",
-    context_count=20,
-    max_tokens=8192,
-    max_snippets=40,
-    freshness="pw",
-    country="US",
-    search_lang="en",
-    context_threshold_mode="balanced",
-)
-brave_search(
-    query="coffee shops",
-    mode="place",
-    location="San Francisco CA United States",
-    count=25,
-    units="metric",
-)
-brave_search(mode="pois", ids=["temporary-poi-id-from-place-result"])
-```
-
-`mode="both"` makes two Brave calls: normal web search for links, then the dedicated LLM Context endpoint for extracted chunks. If the context call fails, the tool still returns web results and includes `llm_context_error` so the failure is visible. `mode="llm"` and `mode="context"` call only the dedicated context endpoint. Place Search requests use Brave's local endpoint family and are billed separately from normal Web Search.
-
-Context mode uses Brave's agent-facing default depth (`context_count=20`) unless you override it. The standard `limit` option still controls web, news, image, video, and suggestion result counts. Place Search uses `count` for up to 100 place results, and `pois` or `descriptions` use temporary POI IDs returned by Place Search. Brave notes that POI IDs expire after roughly 8 hours.
-
-Optional context controls include:
-
-- `context_count`: search results Brave considers for context, 1 to 50
-- `max_tokens`: total context token budget, 1024 to 32768
-- `max_urls`: maximum URLs in context, 1 to 50, defaults to `context_count`
-- `max_snippets`: total snippets, 1 to 256
-- `max_tokens_per_url`: per-URL token budget, 512 to 8192
-- `max_snippets_per_url`: per-URL snippet budget, 1 to 100
-- `context_threshold_mode`: `strict`, `balanced`, `lenient`, or `disabled`
-- `freshness`: `pd`, `pw`, `pm`, `py`, or `YYYY-MM-DDtoYYYY-MM-DD`
-- `country` and `search_lang`: locale controls for Brave ranking
-- `goggles`: a Brave Goggles URL, inline definition, or list of up to 3 entries
-- `spellcheck`, `enable_local`, and `enable_source_metadata`: boolean Brave context options
-- `loc_lat`, `loc_long`, `loc_timezone`, `loc_city`, `loc_state`, `loc_state_name`, `loc_country`, and `loc_postal_code`: optional location hints for local recall
-
-Optional place and local controls include:
-
-- `latitude` and `longitude`: coordinate bias for Place Search, provided together
-- `location`: human-readable location bias such as `Cape Town South Africa`
-- `radius`: optional radius bias in metres
-- `count`: Place Search result count, 1 to 100
-- `country`, `search_lang`, `ui_lang`, `units`, `safesearch`, `spellcheck`, and `geoloc`: Brave Place Search request controls; `search_lang`, `ui_lang`, and `units` also apply to `pois`
-- `ids`: one POI ID or a list of up to 20 POI IDs for `pois` and `descriptions`; `descriptions` sends only `ids`
-
-Place Search responses normalise Brave's POI `results` plus geographic buckets such as `cities`, `countries`, `regions`, `neighborhoods`, `addresses`, `streets`, `mixed`, and the resolved `location`.
-
-The client uses GET for simple context calls and POST for advanced context calls with filters, Goggles, local recall, metadata, or location headers. Transient Brave failures such as timeouts, rate limits, and 5xx responses are retried with a small bounded retry budget.
-
-## Architecture
-
-```mermaid
-flowchart TB
-  Agent[Hermes agent] --> BuiltIn[web_search]
-  Agent --> Advanced[brave_search]
-  BuiltIn --> Registry[Hermes web search registry]
-  Registry --> Brave[brave-pro provider]
-  Advanced --> Client[Shared Brave client]
-  Brave --> Client
-  Client --> API[Brave Search Pro API]
-  Client --> Context[Brave LLM Context API]
-  Client --> Local[Brave Place Search API]
-  Agent --> Extract[web_extract]
-  Extract --> Tavily[web-tavily backend]
-```
-
-The standard Hermes `web_search` tool stays standard. The plugin changes the backend, not the tool contract. Richer Brave modes are explicit, which keeps normal search simple and makes advanced use intentional.
-
-## Repository layout
-
-```text
-src/hermes_brave_search/
-├── __init__.py     # Hermes registration entry point
-├── client.py       # Brave API client and normalisation
-├── compat.py       # Runtime compatibility and safe config defaults
-├── configure.py    # Explicit configuration helper
-├── doctor.py       # Setup diagnostics for Brave and Tavily
-├── provider.py     # Hermes web search provider
-├── schemas.py      # Tool schema for brave_search
-└── tools.py        # Tool handler
-```
-
-## Install options
-
-Canonical Hermes install:
-
-```bash
-hermes plugins install GodsBoy/hermes-brave-search-pro --no-enable
-hermes plugins enable brave-search --allow-tool-override
-hermes gateway restart
-```
-
-Update an existing install:
+### Update an existing installation
 
 ```bash
 hermes plugins update brave-search
+hermes gateway restart
 ```
 
-Direct user-plugin install:
+### Direct user-plugin installation
 
 ```bash
 git clone https://github.com/GodsBoy/hermes-brave-search-pro.git \
@@ -306,7 +191,7 @@ hermes plugins enable brave-search --allow-tool-override
 hermes gateway restart
 ```
 
-Profile-specific install:
+### Named profile
 
 ```bash
 git clone https://github.com/GodsBoy/hermes-brave-search-pro.git \
@@ -316,186 +201,130 @@ hermes --profile myprofile gateway restart
 python3 ~/.hermes/profiles/myprofile/plugins/brave-search/scripts/doctor.py
 ```
 
-From an existing checkout, install a symlink:
+### Existing development checkout
 
 ```bash
 ./scripts/install.sh
 hermes plugins enable brave-search --allow-tool-override
 hermes gateway restart
-
-# Optional profile-aware install
-HERMES_PROFILE=myprofile ./scripts/install.sh
-hermes --profile myprofile plugins enable brave-search --allow-tool-override
-hermes --profile myprofile gateway restart
-python3 ~/.hermes/profiles/myprofile/plugins/brave-search/scripts/doctor.py
 ```
 
-`./scripts/install.sh` is a development helper that installs both
-profile-scoped links. It checks both destinations before creating either link,
-and refuses to replace an existing file, directory, or different symlink. Use
-the plugin-manager or direct-install flows above when you only need the backend.
+Use `HERMES_PROFILE=myprofile ./scripts/install.sh` for a named profile. The helper installs profile-scoped backend and Desktop symlinks and refuses to replace conflicting paths.
 
-For development only:
-
-```bash
-git clone https://github.com/GodsBoy/hermes-brave-search-pro.git
-cd hermes-brave-search-pro
-uv venv
-uv pip install -e '.[dev]'
-uv run pytest
-uv run ruff check .
-```
-
-The default tests mock Brave HTTP responses. Live API calls are not part of the normal test path, so public contributors do not need Brave API quota.
-
-## Troubleshooting
-
-### Run the doctor
-
-Use the doctor command when setup does not look right:
-
-```bash
-python3 ~/.hermes/plugins/brave-search/scripts/doctor.py
-```
-
-These examples use `python3`. If it is unavailable, use the exact interpreter
-printed by `./scripts/install.sh`, or substitute another compatible Python 3.11
-to 3.13 interpreter.
-
-It checks:
-
-- `BRAVE_SEARCH_API_KEY` or compatibility fallback `BRAVE_API_KEY`
-- `TAVILY_API_KEY`
-- `web.backend`
-- `web.search_backend`
-- `web.extract_backend`
-- the safe runtime defaults that select Brave Pro when Brave Free shares the same API key
-- whether `brave-search` is enabled with built-in tool override permission
-
-After adding missing keys, ask the doctor to apply safe provider defaults:
-
-```bash
-python3 ~/.hermes/plugins/brave-search/scripts/doctor.py --fix
-```
-
-Use `--force` with care if you intentionally want to overwrite existing web-provider choices:
-
-```bash
-python3 ~/.hermes/plugins/brave-search/scripts/doctor.py --fix --force
-```
-
-### Hermes cannot see the provider
-
-Check that the plugin is enabled and Hermes was restarted after installation:
-
-```bash
-hermes plugins enable brave-search --allow-tool-override
-hermes gateway restart
-```
-
-Then confirm your config uses the provider name exactly:
-
-```yaml
-web:
-  backend: "brave-pro"
-  search_backend: "brave-pro"
-```
-
-### Search says the API key is missing
-
-Export `BRAVE_SEARCH_API_KEY` in the environment used by the Hermes process. `BRAVE_API_KEY` is accepted as a compatibility fallback, but `BRAVE_SEARCH_API_KEY` is the documented name.
-
-### Extraction stopped using Tavily
-
-Tavily extraction is separate from Brave Search Pro. Enable the bundled Tavily plugin and set extraction explicitly:
-
-```bash
-hermes plugins enable web-tavily
-hermes config set web.extract_backend tavily
-```
-
-Your config should then include:
-
-```yaml
-plugins:
-  enabled:
-    - brave-search
-    - web-tavily
-  entries:
-    brave-search:
-      allow_tool_override: true
-
-web:
-  backend: "brave-pro"
-  search_backend: "brave-pro"
-  extract_backend: "tavily"
-```
-
-Do not rely on `web.backend` for this pairing because that single fallback applies to both capabilities.
+See [Installation](docs/installation.md) for the full profile, credential and remote-backend guide.
 
 ## Desktop Brave Search
 
-The Desktop page is an optional, disabled-by-default add-on. Complete one of
-the backend installation flows above first when you need Brave search on the
-active gateway. Desktop files live only in the selected local profile at
-`desktop-plugins/brave-search`, while the Python backend lives at
-`plugins/brave-search`.
+The Desktop page is optional and disabled by default. Install the backend first, then install the renderer for the selected local profile:
 
-For the default local profile, install the renderer after the backend is ready:
+Desktop files live at `desktop-plugins/brave-search`. The Python backend lives separately at `plugins/brave-search`.
 
 ```bash
 ~/.hermes/plugins/brave-search/scripts/install-desktop.sh
 ```
 
-For a named local profile, use that profile for the renderer path and installer:
+For a named local profile:
 
 ```bash
 HERMES_PROFILE=myprofile \
   ~/.hermes/profiles/myprofile/plugins/brave-search/scripts/install-desktop.sh
 ```
 
+Enable **Brave Search** in Hermes Desktop Settings after installation. The Desktop toggle controls only the renderer and does not require a gateway restart. Loading a Desktop plugin does not automatically import the Python plugin into the gateway. The Python backend remains a separate plugin in the active gateway profile.
+
 ### Remote backend with local Desktop
 
-When Desktop connects to a remote backend, clone the renderer source on the
-Desktop machine, rather than assuming the remote backend checkout exists
-locally:
+When Desktop connects to a remote gateway, keep a persistent renderer checkout on the Desktop machine:
 
 ```bash
 git clone https://github.com/GodsBoy/hermes-brave-search-pro.git \
   ~/hermes-brave-search-desktop
 ~/hermes-brave-search-desktop/scripts/install-desktop.sh
-```
 
-For a named local profile, run:
-
-```bash
 HERMES_PROFILE=myprofile \
   ~/hermes-brave-search-desktop/scripts/install-desktop.sh
 ```
 
-Keep this checkout in place. The installer creates a symlink from the selected
-Desktop profile to its `desktop/` directory, so removing the checkout breaks
-the renderer. This flow does not create a local backend link. Deploy, enable,
-and restart the Python backend on the remote active profile separately.
+Keep this checkout in place because the installer links the selected Desktop profile to its `desktop/` directory. The Desktop-only installer leaves `plugins/brave-search` untouched and does not create a local backend link. Deploy and enable the Python backend separately on the remote active profile. Installing the renderer does not copy, enable or configure the backend.
 
-The Desktop-only installer creates the selected profile's
-`desktop-plugins/brave-search` link and leaves `plugins/brave-search` untouched.
-It does not enable the backend, configure credentials, or deploy anything to a
-remote gateway. Enable Brave Search separately in Hermes Desktop Settings. That
-Settings toggle controls only the renderer and does not require a gateway
-restart.
+Brave Desktop search requires only `BRAVE_SEARCH_API_KEY`. Tavily remains optional and separate. See [Remote backend with local Desktop](docs/installation.md#remote-backend-with-local-desktop) for the complete profile and gateway notes.
 
-Desktop uses the active profile's plugin API. Switching profiles can therefore
-show an unavailable backend until that profile has its own current, enabled,
-credentialed Python backend. If Desktop connects to a remote backend, install
-the renderer locally, then deploy or update the Python plugin on the remote
-active profile, enable it with `--allow-tool-override`, and restart that remote
-gateway after its backend route changes. Installing the local Desktop surface
-does not copy the backend there. Loading a Desktop plugin does not automatically
-import a project Python plugin into the gateway.
+## Troubleshooting
 
-Brave Desktop search requires only `BRAVE_SEARCH_API_KEY`. Tavily remains an
-optional, separate extraction integration.
+Run the doctor after changing credentials or provider settings:
+
+```bash
+python3 ~/.hermes/plugins/brave-search/scripts/doctor.py
+python3 ~/.hermes/plugins/brave-search/scripts/doctor.py --fix
+```
+
+If `python3` is unavailable, use the exact interpreter printed by `./scripts/install.sh`, or another compatible Python 3.11 to 3.13 interpreter.
+
+Use `--force` only when you intend to replace existing web-provider choices:
+
+```bash
+python3 ~/.hermes/plugins/brave-search/scripts/doctor.py --fix --force
+```
+
+The doctor checks:
+
+- Brave and Tavily credentials
+- Plugin enablement and tool override permission
+- `web.backend`, `web.search_backend` and `web.extract_backend`
+- The optional `web-tavily` pairing
+
+Common fixes:
+
+```bash
+hermes plugins enable brave-search --allow-tool-override
+hermes plugins enable web-tavily  # only when using Tavily extraction
+hermes config set web.backend brave-pro
+hermes config set web.search_backend brave-pro
+hermes config set web.extract_backend tavily
+hermes gateway restart
+```
+
+`BRAVE_API_KEY` is accepted as a compatibility fallback, but `BRAVE_SEARCH_API_KEY` is the documented variable.
+
+## Architecture
+
+```mermaid
+flowchart TB
+  Agent[Hermes agent] --> Search[web_search]
+  Agent --> Advanced[brave_search]
+  Search --> Registry[Hermes web provider registry]
+  Registry --> Provider[brave-pro]
+  Provider --> Client[Shared Brave client]
+  Advanced --> Client
+  Client --> Web[Brave Web Search]
+  Client --> Context[Brave LLM Context]
+  Client --> Place[Brave Place Search]
+  Agent --> Extract[web_extract]
+  Extract --> ExtractProvider[Configured extraction provider]
+```
+
+The standard `web_search` tool keeps the Hermes response contract. The plugin changes the provider behind it. Brave-specific parameters stay on the explicit `brave_search` tool.
+
+## Development
+
+```bash
+git clone https://github.com/GodsBoy/hermes-brave-search-pro.git
+cd hermes-brave-search-pro
+uv venv
+uv pip install -e '.[dev]'
+uv run ruff check .
+uv run pytest
+```
+
+Tests use mocked Brave responses, so contributors do not need Brave API quota.
+
+## References
+
+- [Hermes plugin guide](https://hermes-agent.nousresearch.com/docs/developer-guide/plugins)
+- [Hermes web-search provider guide](https://hermes-agent.nousresearch.com/docs/developer-guide/web-search-provider-plugin)
+- [Brave LLM Context API](https://api-dashboard.search.brave.com/documentation/services/llm-context)
+- [Brave Place Search API](https://api-dashboard.search.brave.com/documentation/services/place-search)
+- [Brave Search API](https://brave.com/search/api/)
 
 ## License
 
