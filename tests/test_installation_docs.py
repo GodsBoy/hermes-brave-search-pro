@@ -208,6 +208,25 @@ def run_script(
     return result
 
 
+def write_fake_python(
+    path: Path,
+    *,
+    real_python: str,
+    version: tuple[int, int],
+) -> None:
+    path.write_text(
+        f"#!{real_python}\n"
+        "import os\n"
+        "import sys\n"
+        'if sys.argv[1:2] == ["-c"]:\n'
+        f"    code = sys.argv[2].replace(\"sys.version_info\", {str(version)!r})\n"
+        '    exec(compile(code, "<installer-probe>", "exec"))\n'
+        f"os.execv({real_python!r}, [{real_python!r}, *sys.argv[1:]])\n",
+        encoding="utf-8",
+    )
+    path.chmod(0o755)
+
+
 def test_symlink_installer_prints_default_permission_and_restart_flow(
     tmp_path: Path,
 ) -> None:
@@ -261,15 +280,11 @@ def test_symlink_installer_prints_selected_python_for_doctor(
     python_binary = shutil.which("python3") or shutil.which("python")
     assert python_binary is not None
     selected_python = bin_dir / "python3"
-    selected_python.write_text(
-        "#!/bin/sh\n"
-        'if [ "$1" = "-c" ]; then\n'
-        "  exit 0\n"
-        "fi\n"
-        f'exec "{python_binary}" "$@"\n',
-        encoding="utf-8",
+    write_fake_python(
+        selected_python,
+        real_python=python_binary,
+        version=(3, 11),
     )
-    selected_python.chmod(0o755)
 
     output = run_script(
         tmp_path,
@@ -288,24 +303,20 @@ def test_symlink_installer_prints_selected_python_for_doctor(
 def test_symlink_installer_rejects_unsupported_python_versions(
     tmp_path: Path,
 ) -> None:
-    for version in ("3.10", "3.14"):
-        case_home = tmp_path / version
+    python_binary = shutil.which("python3") or shutil.which("python")
+    assert python_binary is not None
+
+    for version in ((3, 10), (3, 14)):
+        case_home = tmp_path / ".".join(map(str, version))
         bin_dir = case_home / "bin"
         bin_dir.mkdir(parents=True)
 
         for candidate in ("python3", "python"):
-            (bin_dir / candidate).write_text(
-                "#!/bin/sh\n"
-                'if [ "$1" = "-c" ]; then\n'
-                '  case "$2" in\n'
-                '    *"(3, 11)"*"(3, 14)"*) exit 1 ;;\n'
-                "    *) exit 0 ;;\n"
-                "  esac\n"
-                "fi\n"
-                "exit 1\n",
-                encoding="utf-8",
+            write_fake_python(
+                bin_dir / candidate,
+                real_python=python_binary,
+                version=version,
             )
-            (bin_dir / candidate).chmod(0o755)
 
         result = run_script(
             case_home,
