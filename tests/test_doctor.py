@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 import types
 
-from hermes_brave_search.doctor import main, run_checks
+from hermes_brave_search.doctor import Check, main, run_checks
 
 
 def _configured_plugins() -> dict:
@@ -127,6 +127,18 @@ def test_doctor_without_fix_does_not_update_config(monkeypatch, capsys):
 
     assert main([]) == 0
     assert "All Brave Search Pro checks passed." in capsys.readouterr().out
+
+
+def test_doctor_passes_with_non_empty_successful_checks(monkeypatch, capsys):
+    monkeypatch.setattr(
+        "hermes_brave_search.doctor.run_checks",
+        lambda: [Check("configured", True, "present")],
+    )
+
+    assert main([]) == 0
+    output = capsys.readouterr().out
+    assert "✓ configured: present" in output
+    assert "All Brave Search Pro checks passed." in output
 
 
 def test_doctor_fix_reports_config_errors_without_traceback(monkeypatch, capsys):

@@ -236,13 +236,8 @@ def test_reexec_uses_resolved_polyglot_interpreter(doctor, monkeypatch, tmp_path
     assert calls == [(expected, [expected, str(SCRIPT), "--fix"])]
 
 
-def test_reexec_uses_launcher_environment_when_other_hermes_is_importable(
-    doctor,
-    monkeypatch,
-    tmp_path,
-):
+def test_reexec_uses_launcher_environment(doctor, monkeypatch, tmp_path):
     interpreter = _python_link(tmp_path / "python3")
-    monkeypatch.setattr(importlib.util, "find_spec", lambda name: object())
     monkeypatch.setattr(doctor, "_hermes_python", lambda: str(interpreter))
     calls = []
     monkeypatch.setattr(

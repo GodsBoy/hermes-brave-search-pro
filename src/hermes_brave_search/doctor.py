@@ -201,8 +201,7 @@ def main(argv: list[str] | None = None) -> int:
     for check in checks:
         print(f"{check.mark} {check.name}: {check.detail}")
 
-    failures = [check for check in checks if not check.ok]
-    if failures:
+    if any(not check.ok for check in checks):
         print("\nNext steps:")
         print(
             "- Missing API keys can be added during plugin install or in "

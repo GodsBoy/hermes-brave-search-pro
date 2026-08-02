@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from .compat import apply_runtime_compat
+from .constants import BRAVE_API_KEY_ENV as _BRAVE_API_KEY_ENV
 from .provider import BraveProSearchProvider
 from .schemas import BRAVE_SEARCH_SCHEMA
 from .tools import brave_search_tool
@@ -20,7 +21,7 @@ def register(ctx) -> None:
         schema=BRAVE_SEARCH_SCHEMA,
         handler=brave_search_tool,
         check_fn=provider.is_available,
-        requires_env=["BRAVE_SEARCH_API_KEY"],
+        requires_env=[_BRAVE_API_KEY_ENV],
         emoji="🦁",
         override=True,
         description=(
