@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import httpx
+import pytest
 
 from hermes_brave_search.client import (
     DEFAULT_CONTEXT_COUNT,
@@ -172,6 +173,38 @@ def test_search_handles_http_failures(monkeypatch):
     result = BraveSearchClient(api_key="key").search("hermes", mode="web")
 
     assert result == {"success": False, "error": "timeout"}
+
+
+@pytest.mark.parametrize("mode", ["news", "images", "videos"])
+def test_normalise_payload_handles_media_modes(mode):
+    client = BraveSearchClient(api_key="key")
+    payload = {
+        mode: {
+            "results": [
+                {
+                    "source": "Hermes docs",
+                    "page_url": "https://hermes-agent.nousresearch.com/docs",
+                    "description": "Plugin documentation",
+                    "thumbnail_url": "https://example.test/thumbnail.png",
+                }
+            ]
+        }
+    }
+
+    assert client.normalise_payload(payload, mode=mode) == {
+        "success": True,
+        "data": {
+            mode: [
+                {
+                    "title": "Hermes docs",
+                    "url": "https://hermes-agent.nousresearch.com/docs",
+                    "description": "Plugin documentation",
+                    "thumbnail": "https://example.test/thumbnail.png",
+                    "position": 1,
+                }
+            ]
+        },
+    }
 
 
 def test_normalise_payload_tolerates_malformed_shapes():
@@ -620,6 +653,34 @@ def test_place_search_routes_to_local_endpoint(monkeypatch):
         "units": "metric",
         "safesearch": "strict",
         "spellcheck": True,
+    }
+
+
+@pytest.mark.parametrize(
+    "mode",
+    [
+        "both",
+        "web",
+        "llm",
+        "context",
+        "images",
+        "news",
+        "videos",
+        "discussions",
+        "suggest",
+        "raw",
+    ],
+)
+def test_search_requires_query_for_non_local_modes(mode, monkeypatch):
+    def fail_request(*args, **kwargs):
+        raise AssertionError("blank queries must not make HTTP requests")
+
+    monkeypatch.setattr(httpx, "get", fail_request)
+    monkeypatch.setattr(httpx, "post", fail_request)
+
+    assert BraveSearchClient(api_key="key").search("  ", mode=mode) == {
+        "success": False,
+        "error": "query is required",
     }
 
 

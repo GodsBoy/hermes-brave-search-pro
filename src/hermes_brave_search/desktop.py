@@ -34,10 +34,7 @@ def search_desktop_web(
         client.max_retries = DESKTOP_MAX_RETRIES
         client.backoff_seconds = DESKTOP_RETRY_BACKOFF_SECONDS
     if not client.resolved_api_key():
-        return {
-            "outcome": "missing_credential",
-            "message": "BRAVE_SEARCH_API_KEY is required for Brave Search.",
-        }
+        return _api_failure("missing_credential")
 
     try:
         result = client.search(clean_query, mode="web", limit=DESKTOP_RESULT_LIMIT)

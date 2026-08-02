@@ -135,8 +135,7 @@ class BraveSearchClient:
                 "error": f"Unsupported Brave search mode: {mode}",
             }
         query = str(query or "").strip()
-        query_required_modes = set(self.MODE_ENDPOINTS) - QUERY_OPTIONAL_MODES
-        if mode in query_required_modes and not query:
+        if mode not in QUERY_OPTIONAL_MODES and not query:
             return {"success": False, "error": "query is required"}
 
         context_options: dict[str, Any] | None = None
@@ -291,14 +290,8 @@ class BraveSearchClient:
         if mode == "discussions":
             data["discussions"] = self._normalise_nested_results(payload, "discussions")
 
-        if mode == "news":
-            data["news"] = self._normalise_media_results(payload, "news")
-
-        if mode == "images":
-            data["images"] = self._normalise_media_results(payload, "images")
-
-        if mode == "videos":
-            data["videos"] = self._normalise_media_results(payload, "videos")
+        if mode in {"news", "images", "videos"}:
+            data[mode] = self._normalise_media_results(payload, mode)
 
         return {"success": True, "data": data}
 
@@ -730,10 +723,9 @@ class BraveSearchClient:
     def _normalise_nested_results(
         self, payload: dict[str, Any], key: str
     ) -> list[dict[str, Any]]:
-        raw_results = nested_results(payload, key)
-        if not isinstance(raw_results, list):
-            return []
-        return [item for item in raw_results if isinstance(item, dict)]
+        return [
+            item for item in nested_results(payload, key) if isinstance(item, dict)
+        ]
 
     def _normalise_media_results(
         self, payload: dict[str, Any], key: str
