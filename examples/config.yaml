@@ -3,6 +3,7 @@
 plugins:
   enabled:
     - brave-search
+    - web-tavily
   entries:
     brave-search:
       allow_tool_override: true

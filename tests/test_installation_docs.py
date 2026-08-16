@@ -105,6 +105,13 @@ def test_manual_configuration_includes_permission_and_brave_backends() -> None:
         'backend: "brave-pro"',
         'search_backend: "brave-pro"',
     )
+    assert_in_order(
+        config,
+        "enabled:",
+        "- brave-search",
+        "- web-tavily",
+        'extract_backend: "tavily"',
+    )
 
 
 def test_after_install_does_not_claim_private_picker_patching() -> None:
