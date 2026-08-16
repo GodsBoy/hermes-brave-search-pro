@@ -105,13 +105,16 @@ def test_manual_configuration_includes_permission_and_brave_backends() -> None:
         'backend: "brave-pro"',
         'search_backend: "brave-pro"',
     )
-    assert_in_order(
+    enabled_block = re.search(
+        r"(?m)^plugins:\n  enabled:\n(?P<items>(?:    - [^\n]+\n)+)",
         config,
-        "enabled:",
-        "- brave-search",
-        "- web-tavily",
-        'extract_backend: "tavily"',
     )
+    assert enabled_block is not None
+    enabled_plugins = set(
+        re.findall(r"(?m)^    - ([a-z0-9-]+)\s*$", enabled_block.group("items"))
+    )
+    assert {"brave-search", "web-tavily"} <= enabled_plugins
+    assert 'extract_backend: "tavily"' in config
 
 
 def test_after_install_does_not_claim_private_picker_patching() -> None:
