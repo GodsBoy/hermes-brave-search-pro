@@ -106,13 +106,211 @@ def test_doctor_reports_missing_tavily(monkeypatch, capsys):
     monkeypatch.setitem(sys.modules, "hermes_cli", hermes_cli)
     monkeypatch.setitem(sys.modules, "hermes_cli.config", config_mod)
 
-    assert main([]) == 1
+    assert main([]) == 0
     output = capsys.readouterr().out
     assert "TAVILY_API_KEY" in output
     assert "web-tavily plugin" in output
     assert "hermes plugins enable web-tavily" in output
     assert "missing" in output
-    assert "--fix" in output
+    assert "[advisory]" in output
+
+
+def test_doctor_explicit_tavily_missing_key_is_fatal(monkeypatch, capsys):
+    monkeypatch.setattr(
+        "hermes_brave_search.doctor._plugin_statuses",
+        lambda: {"brave-search": True, "web-tavily": True},
+    )
+    monkeypatch.delenv("TAVILY_API_KEY", raising=False)
+    config = {
+        "plugins": _configured_plugins(),
+        "web": {
+            "backend": "brave-pro",
+            "search_backend": "brave-pro",
+            "extract_backend": "tavily",
+        },
+    }
+
+    config_mod = types.ModuleType("hermes_cli.config")
+    config_mod.get_env_value = (  # type: ignore[attr-defined]
+        lambda key: "present" if key == "BRAVE_SEARCH_API_KEY" else ""
+    )
+    config_mod.load_config = lambda: config  # type: ignore[attr-defined]
+    hermes_cli = types.ModuleType("hermes_cli")
+    hermes_cli.config = config_mod  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "hermes_cli", hermes_cli)
+    monkeypatch.setitem(sys.modules, "hermes_cli.config", config_mod)
+
+    assert main([]) == 1
+    output = capsys.readouterr().out
+    assert "TAVILY_API_KEY" in output
+    assert "advisory" not in output
+
+
+def test_doctor_explicit_tavily_disabled_plugin_is_fatal(monkeypatch, capsys):
+    monkeypatch.setattr(
+        "hermes_brave_search.doctor._plugin_statuses",
+        lambda: {"brave-search": True, "web-tavily": False},
+    )
+    monkeypatch.setenv("TAVILY_API_KEY", "tavily-key")
+    config = {
+        "plugins": _configured_plugins(),
+        "web": {
+            "backend": "brave-pro",
+            "search_backend": "brave-pro",
+            "extract_backend": "tavily",
+        },
+    }
+    config_mod = types.ModuleType("hermes_cli.config")
+    config_mod.get_env_value = lambda key: "present"  # type: ignore[attr-defined]
+    config_mod.load_config = lambda: config  # type: ignore[attr-defined]
+    hermes_cli = types.ModuleType("hermes_cli")
+    hermes_cli.config = config_mod  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "hermes_cli", hermes_cli)
+    monkeypatch.setitem(sys.modules, "hermes_cli.config", config_mod)
+
+    assert main([]) == 1
+    output = capsys.readouterr().out
+    assert "web-tavily plugin: not enabled" in output
+
+
+def test_doctor_non_tavily_extract_provider_keeps_tavily_advisory(
+    monkeypatch, capsys
+):
+    monkeypatch.setattr(
+        "hermes_brave_search.doctor._plugin_statuses",
+        lambda: {"brave-search": True, "web-tavily": False},
+    )
+    config = {
+        "plugins": _configured_plugins(),
+        "web": {
+            "backend": "brave-pro",
+            "search_backend": "brave-pro",
+            "extract_backend": "builtin",
+        },
+    }
+    config_mod = types.ModuleType("hermes_cli.config")
+    config_mod.get_env_value = (  # type: ignore[attr-defined]
+        lambda key: "present" if key == "BRAVE_SEARCH_API_KEY" else ""
+    )
+    config_mod.load_config = lambda: config  # type: ignore[attr-defined]
+    hermes_cli = types.ModuleType("hermes_cli")
+    hermes_cli.config = config_mod  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "hermes_cli", hermes_cli)
+    monkeypatch.setitem(sys.modules, "hermes_cli.config", config_mod)
+
+    assert main([]) == 0
+    output = capsys.readouterr().out
+    assert "TAVILY_API_KEY: missing" in output
+    assert "[advisory]" in output
+    assert "All required Brave Search Pro checks passed." in output
+
+
+def test_doctor_explicit_tavily_unknown_plugin_is_fatal(monkeypatch, capsys):
+    monkeypatch.setattr(
+        "hermes_brave_search.doctor._plugin_statuses",
+        lambda: None,
+    )
+    config = {
+        "plugins": _configured_plugins(),
+        "web": {
+            "backend": "brave-pro",
+            "search_backend": "brave-pro",
+            "extract_backend": "tavily",
+        },
+    }
+    config_mod = types.ModuleType("hermes_cli.config")
+    config_mod.get_env_value = lambda key: "present"  # type: ignore[attr-defined]
+    config_mod.load_config = lambda: config  # type: ignore[attr-defined]
+    hermes_cli = types.ModuleType("hermes_cli")
+    hermes_cli.config = config_mod  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "hermes_cli", hermes_cli)
+    monkeypatch.setitem(sys.modules, "hermes_cli.config", config_mod)
+
+    assert main([]) == 1
+    output = capsys.readouterr().out
+    assert "web-tavily plugin: unable to verify" in output
+    assert "[advisory]" not in output
+
+
+def test_doctor_missing_brave_override_is_fatal_when_tavily_unselected(
+    monkeypatch, capsys
+):
+    monkeypatch.setattr(
+        "hermes_brave_search.doctor._plugin_statuses",
+        lambda: {"brave-search": True, "web-tavily": False},
+    )
+    config = {
+        "plugins": {"enabled": ["brave-search"]},
+        "web": {
+            "backend": "brave-pro",
+            "search_backend": "brave-pro",
+            "extract_backend": "builtin",
+        },
+    }
+    config_mod = types.ModuleType("hermes_cli.config")
+    config_mod.get_env_value = (  # type: ignore[attr-defined]
+        lambda key: "present" if key == "BRAVE_SEARCH_API_KEY" else ""
+    )
+    config_mod.load_config = lambda: config  # type: ignore[attr-defined]
+    hermes_cli = types.ModuleType("hermes_cli")
+    hermes_cli.config = config_mod  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "hermes_cli", hermes_cli)
+    monkeypatch.setitem(sys.modules, "hermes_cli.config", config_mod)
+
+    assert main([]) == 1
+    output = capsys.readouterr().out
+    assert "brave-search tool override: missing" in output
+    assert "TAVILY_API_KEY" in output
+    assert "[advisory]" in output
+
+
+def test_doctor_full_tavily_configuration_passes_main(monkeypatch, capsys):
+    monkeypatch.setattr(
+        "hermes_brave_search.doctor._plugin_statuses",
+        lambda: {"brave-search": True, "web-tavily": True},
+    )
+    config = {
+        "plugins": _configured_plugins(),
+        "web": {
+            "backend": "brave-pro",
+            "search_backend": "brave-pro",
+            "extract_backend": "tavily",
+        },
+    }
+    config_mod = types.ModuleType("hermes_cli.config")
+    config_mod.get_env_value = lambda key: "present"  # type: ignore[attr-defined]
+    config_mod.load_config = lambda: config  # type: ignore[attr-defined]
+    hermes_cli = types.ModuleType("hermes_cli")
+    hermes_cli.config = config_mod  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "hermes_cli", hermes_cli)
+    monkeypatch.setitem(sys.modules, "hermes_cli.config", config_mod)
+
+    assert main([]) == 0
+    output = capsys.readouterr().out
+    assert "All required Brave Search Pro checks passed." in output
+    assert "[advisory]" not in output
+
+
+def test_doctor_nonblocking_failed_check_is_advisory(monkeypatch, capsys):
+    monkeypatch.setattr(
+        "hermes_brave_search.doctor.run_checks",
+        lambda: [Check("optional", False, "missing", blocking=False)],
+    )
+
+    assert main([]) == 0
+    output = capsys.readouterr().out
+    assert "! optional: missing [advisory]" in output
+    assert "All required Brave Search Pro checks passed." in output
+
+
+def test_doctor_failed_three_argument_check_is_blocking(monkeypatch, capsys):
+    monkeypatch.setattr(
+        "hermes_brave_search.doctor.run_checks",
+        lambda: [Check("required", False, "missing")],
+    )
+
+    assert main([]) == 1
+    assert "required: missing" in capsys.readouterr().out
 
 
 def test_doctor_without_fix_does_not_update_config(monkeypatch, capsys):
@@ -126,7 +324,7 @@ def test_doctor_without_fix_does_not_update_config(monkeypatch, capsys):
     monkeypatch.setattr("hermes_brave_search.doctor.run_checks", lambda: [])
 
     assert main([]) == 0
-    assert "All Brave Search Pro checks passed." in capsys.readouterr().out
+    assert "All required Brave Search Pro checks passed." in capsys.readouterr().out
 
 
 def test_doctor_passes_with_non_empty_successful_checks(monkeypatch, capsys):
@@ -138,7 +336,7 @@ def test_doctor_passes_with_non_empty_successful_checks(monkeypatch, capsys):
     assert main([]) == 0
     output = capsys.readouterr().out
     assert "✓ configured: present" in output
-    assert "All Brave Search Pro checks passed." in output
+    assert "All required Brave Search Pro checks passed." in output
 
 
 def test_doctor_fix_reports_config_errors_without_traceback(monkeypatch, capsys):

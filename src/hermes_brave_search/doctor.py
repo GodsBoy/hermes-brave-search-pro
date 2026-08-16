@@ -23,10 +23,13 @@ class Check:
     name: str
     ok: bool
     detail: str
+    blocking: bool = True
 
     @property
     def mark(self) -> str:
-        return "✓" if self.ok else "✗"
+        if self.ok:
+            return "✓"
+        return "✗" if self.blocking else "!"
 
 
 def _load_config() -> dict:
@@ -91,14 +94,20 @@ def _tool_override_allowed(config: dict) -> bool:
     )
 
 
-def _plugin_check(name: str, enabled: bool | None, enable_command: str) -> Check:
+def _plugin_check(
+    name: str,
+    enabled: bool | None,
+    enable_command: str,
+    *,
+    blocking: bool = True,
+) -> Check:
     if enabled is True:
         detail = "enabled"
     elif enabled is False:
         detail = f"not enabled. Run: {enable_command}"
     else:
         detail = "unable to verify. Run: hermes plugins list"
-    return Check(f"{name} plugin", enabled is True, detail)
+    return Check(f"{name} plugin", enabled is True, detail, blocking=blocking)
 
 
 def run_checks() -> list[Check]:
@@ -116,6 +125,7 @@ def run_checks() -> list[Check]:
     backend = web.get("backend")
     search_backend = web.get("search_backend")
     extract_backend = web.get("extract_backend")
+    tavily_selected = extract_backend == TAVILY_BACKEND
 
     return [
         Check(
@@ -144,11 +154,13 @@ def run_checks() -> list[Check]:
             "present"
             if tavily_key
             else "missing. Recommended for web_extract. Free key: https://app.tavily.com/",
+            blocking=tavily_selected,
         ),
         _plugin_check(
             "web-tavily",
             web_tavily_enabled,
             "hermes plugins enable web-tavily",
+            blocking=tavily_selected,
         ),
         Check(
             "web.backend",
@@ -164,6 +176,7 @@ def run_checks() -> list[Check]:
             "web.extract_backend",
             extract_backend == TAVILY_BACKEND,
             f"{extract_backend!r}" if extract_backend else "not set",
+            blocking=tavily_selected,
         ),
     ]
 
@@ -199,9 +212,10 @@ def main(argv: list[str] | None = None) -> int:
     print("\nBrave Search Pro doctor")
     checks = run_checks()
     for check in checks:
-        print(f"{check.mark} {check.name}: {check.detail}")
+        advisory = " [advisory]" if not check.blocking else ""
+        print(f"{check.mark} {check.name}: {check.detail}{advisory}")
 
-    if any(not check.ok for check in checks):
+    if any(not check.ok and check.blocking for check in checks):
         print("\nNext steps:")
         print(
             "- Missing API keys can be added during plugin install or in "
@@ -219,7 +233,7 @@ def main(argv: list[str] | None = None) -> int:
         print("- Restart the gateway after changing plugin, env, or provider config.")
         return 1
 
-    print("\nAll Brave Search Pro checks passed.")
+    print("\nAll required Brave Search Pro checks passed.")
     return 0
 
 
