@@ -15,6 +15,26 @@ def _configured_plugins() -> dict:
     }
 
 
+def _present_env_value(_key: str) -> str:
+    return "present"
+
+
+def _install_config(
+    monkeypatch,
+    config: dict,
+    *,
+    get_env_value=_present_env_value,
+) -> None:
+    config_mod = types.ModuleType("hermes_cli.config")
+    config_mod.get_env_value = get_env_value  # type: ignore[attr-defined]
+    config_mod.load_config = lambda: config  # type: ignore[attr-defined]
+
+    hermes_cli = types.ModuleType("hermes_cli")
+    hermes_cli.config = config_mod  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "hermes_cli", hermes_cli)
+    monkeypatch.setitem(sys.modules, "hermes_cli.config", config_mod)
+
+
 def test_doctor_checks_keys_plugins_permission_and_web_config(monkeypatch):
     monkeypatch.setattr(
         "hermes_brave_search.doctor._plugin_statuses",
@@ -29,14 +49,7 @@ def test_doctor_checks_keys_plugins_permission_and_web_config(monkeypatch):
         },
     }
 
-    config_mod = types.ModuleType("hermes_cli.config")
-    config_mod.get_env_value = lambda key: "present"  # type: ignore[attr-defined]
-    config_mod.load_config = lambda: config  # type: ignore[attr-defined]
-
-    hermes_cli = types.ModuleType("hermes_cli")
-    hermes_cli.config = config_mod  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "hermes_cli", hermes_cli)
-    monkeypatch.setitem(sys.modules, "hermes_cli.config", config_mod)
+    _install_config(monkeypatch, config)
 
     checks = run_checks()
 
@@ -67,15 +80,7 @@ def test_doctor_fails_when_override_permission_is_missing(monkeypatch, capsys):
         },
     }
 
-    config_mod = types.ModuleType("hermes_cli.config")
-    config_mod.get_env_value = lambda key: "present"  # type: ignore[attr-defined]
-    config_mod.load_config = lambda: config  # type: ignore[attr-defined]
-    config_mod.save_config = lambda value: None  # type: ignore[attr-defined]
-
-    hermes_cli = types.ModuleType("hermes_cli")
-    hermes_cli.config = config_mod  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "hermes_cli", hermes_cli)
-    monkeypatch.setitem(sys.modules, "hermes_cli.config", config_mod)
+    _install_config(monkeypatch, config)
 
     assert main([]) == 1
     output = capsys.readouterr().out
@@ -94,17 +99,13 @@ def test_doctor_reports_missing_tavily(monkeypatch, capsys):
         "web": {"backend": "brave-pro", "search_backend": "brave-pro"},
     }
 
-    config_mod = types.ModuleType("hermes_cli.config")
-    config_mod.get_env_value = (  # type: ignore[attr-defined]
-        lambda key: "present" if key == "BRAVE_SEARCH_API_KEY" else ""
+    _install_config(
+        monkeypatch,
+        config,
+        get_env_value=lambda key: (
+            "present" if key == "BRAVE_SEARCH_API_KEY" else ""
+        ),
     )
-    config_mod.load_config = lambda: config  # type: ignore[attr-defined]
-    config_mod.save_config = lambda value: None  # type: ignore[attr-defined]
-
-    hermes_cli = types.ModuleType("hermes_cli")
-    hermes_cli.config = config_mod  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "hermes_cli", hermes_cli)
-    monkeypatch.setitem(sys.modules, "hermes_cli.config", config_mod)
 
     assert main([]) == 0
     output = capsys.readouterr().out
@@ -130,15 +131,13 @@ def test_doctor_explicit_tavily_missing_key_is_fatal(monkeypatch, capsys):
         },
     }
 
-    config_mod = types.ModuleType("hermes_cli.config")
-    config_mod.get_env_value = (  # type: ignore[attr-defined]
-        lambda key: "present" if key == "BRAVE_SEARCH_API_KEY" else ""
+    _install_config(
+        monkeypatch,
+        config,
+        get_env_value=lambda key: (
+            "present" if key == "BRAVE_SEARCH_API_KEY" else ""
+        ),
     )
-    config_mod.load_config = lambda: config  # type: ignore[attr-defined]
-    hermes_cli = types.ModuleType("hermes_cli")
-    hermes_cli.config = config_mod  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "hermes_cli", hermes_cli)
-    monkeypatch.setitem(sys.modules, "hermes_cli.config", config_mod)
 
     assert main([]) == 1
     output = capsys.readouterr().out
@@ -160,13 +159,7 @@ def test_doctor_explicit_tavily_disabled_plugin_is_fatal(monkeypatch, capsys):
             "extract_backend": "tavily",
         },
     }
-    config_mod = types.ModuleType("hermes_cli.config")
-    config_mod.get_env_value = lambda key: "present"  # type: ignore[attr-defined]
-    config_mod.load_config = lambda: config  # type: ignore[attr-defined]
-    hermes_cli = types.ModuleType("hermes_cli")
-    hermes_cli.config = config_mod  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "hermes_cli", hermes_cli)
-    monkeypatch.setitem(sys.modules, "hermes_cli.config", config_mod)
+    _install_config(monkeypatch, config)
 
     assert main([]) == 1
     output = capsys.readouterr().out
@@ -188,15 +181,13 @@ def test_doctor_non_tavily_extract_provider_keeps_tavily_advisory(
             "extract_backend": "builtin",
         },
     }
-    config_mod = types.ModuleType("hermes_cli.config")
-    config_mod.get_env_value = (  # type: ignore[attr-defined]
-        lambda key: "present" if key == "BRAVE_SEARCH_API_KEY" else ""
+    _install_config(
+        monkeypatch,
+        config,
+        get_env_value=lambda key: (
+            "present" if key == "BRAVE_SEARCH_API_KEY" else ""
+        ),
     )
-    config_mod.load_config = lambda: config  # type: ignore[attr-defined]
-    hermes_cli = types.ModuleType("hermes_cli")
-    hermes_cli.config = config_mod  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "hermes_cli", hermes_cli)
-    monkeypatch.setitem(sys.modules, "hermes_cli.config", config_mod)
 
     assert main([]) == 0
     output = capsys.readouterr().out
@@ -218,13 +209,7 @@ def test_doctor_explicit_tavily_unknown_plugin_is_fatal(monkeypatch, capsys):
             "extract_backend": "tavily",
         },
     }
-    config_mod = types.ModuleType("hermes_cli.config")
-    config_mod.get_env_value = lambda key: "present"  # type: ignore[attr-defined]
-    config_mod.load_config = lambda: config  # type: ignore[attr-defined]
-    hermes_cli = types.ModuleType("hermes_cli")
-    hermes_cli.config = config_mod  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "hermes_cli", hermes_cli)
-    monkeypatch.setitem(sys.modules, "hermes_cli.config", config_mod)
+    _install_config(monkeypatch, config)
 
     assert main([]) == 1
     output = capsys.readouterr().out
@@ -247,15 +232,13 @@ def test_doctor_missing_brave_override_is_fatal_when_tavily_unselected(
             "extract_backend": "builtin",
         },
     }
-    config_mod = types.ModuleType("hermes_cli.config")
-    config_mod.get_env_value = (  # type: ignore[attr-defined]
-        lambda key: "present" if key == "BRAVE_SEARCH_API_KEY" else ""
+    _install_config(
+        monkeypatch,
+        config,
+        get_env_value=lambda key: (
+            "present" if key == "BRAVE_SEARCH_API_KEY" else ""
+        ),
     )
-    config_mod.load_config = lambda: config  # type: ignore[attr-defined]
-    hermes_cli = types.ModuleType("hermes_cli")
-    hermes_cli.config = config_mod  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "hermes_cli", hermes_cli)
-    monkeypatch.setitem(sys.modules, "hermes_cli.config", config_mod)
 
     assert main([]) == 1
     output = capsys.readouterr().out
@@ -277,13 +260,7 @@ def test_doctor_full_tavily_configuration_passes_main(monkeypatch, capsys):
             "extract_backend": "tavily",
         },
     }
-    config_mod = types.ModuleType("hermes_cli.config")
-    config_mod.get_env_value = lambda key: "present"  # type: ignore[attr-defined]
-    config_mod.load_config = lambda: config  # type: ignore[attr-defined]
-    hermes_cli = types.ModuleType("hermes_cli")
-    hermes_cli.config = config_mod  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "hermes_cli", hermes_cli)
-    monkeypatch.setitem(sys.modules, "hermes_cli.config", config_mod)
+    _install_config(monkeypatch, config)
 
     assert main([]) == 0
     output = capsys.readouterr().out
@@ -346,14 +323,7 @@ def test_doctor_fix_reports_config_errors_without_traceback(monkeypatch, capsys)
         raising=False,
     )
 
-    config_mod = types.ModuleType("hermes_cli.config")
-    config_mod.get_env_value = lambda key: "present"  # type: ignore[attr-defined]
-    config_mod.load_config = lambda: {}  # type: ignore[attr-defined]
-
-    hermes_cli = types.ModuleType("hermes_cli")
-    hermes_cli.config = config_mod  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "hermes_cli", hermes_cli)
-    monkeypatch.setitem(sys.modules, "hermes_cli.config", config_mod)
+    _install_config(monkeypatch, {})
     monkeypatch.setattr(
         "hermes_brave_search.doctor._plugin_statuses",
         lambda: None,
