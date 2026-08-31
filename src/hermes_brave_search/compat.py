@@ -28,14 +28,12 @@ class CompatReport:
 def _get_env_value(name: str) -> str | None:
     try:
         from hermes_cli.config import get_env_value  # type: ignore
+    except ImportError:
+        value = os.environ.get(name, "")
+    else:
+        value = get_env_value(name) or ""
 
-        value = get_env_value(name)
-        if value and (normalized := str(value).strip()):
-            return normalized
-    except Exception:
-        pass
-
-    value = os.environ.get(name, "").strip()
+    value = str(value).strip()
     return value or None
 
 
