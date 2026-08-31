@@ -33,6 +33,7 @@ def test_entry_point_loads_module_with_register():
 
     assert hasattr(loaded, "register")
     assert callable(loaded.register)
+    assert hasattr(loaded, "TavilyExtractProvider")
 
 
 def test_directory_plugin_shim_exposes_register():

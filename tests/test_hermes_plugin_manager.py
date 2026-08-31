@@ -23,10 +23,12 @@ Version: 0
 _SCENARIO = textwrap.dedent(
     """
     import json
+    import socket
     import sys
     from pathlib import Path
 
     from agent.web_search_registry import (
+        get_active_extract_provider,
         get_active_search_provider,
         get_provider,
     )
@@ -34,6 +36,21 @@ _SCENARIO = textwrap.dedent(
     from hermes_cli.plugins import PluginManager
     from hermes_cli.tools_config import _plugin_web_search_providers
     from tools.registry import registry
+
+    network_attempts = []
+
+    socket_type = socket.socket
+
+    class NetworkGuardSocket(socket_type):
+        def connect(self, *args, **kwargs):
+            network_attempts.append((args, kwargs))
+            raise AssertionError("provider registration must not make network calls")
+
+        def connect_ex(self, *args, **kwargs):
+            network_attempts.append((args, kwargs))
+            raise AssertionError("provider registration must not make network calls")
+
+    socket.socket = NetworkGuardSocket
 
     hermes_home = Path(sys.argv[1])
     start_allowed = sys.argv[2] == "allowed"
@@ -79,6 +96,7 @@ _SCENARIO = textwrap.dedent(
         "first_handler": first_entry.handler.__module__,
         "first_toolset": first_entry.toolset,
         "first_provider_present": get_provider("brave-pro") is not None,
+        "first_tavily_provider_present": get_provider("tavily") is not None,
         "first_config": load_config(),
     }
 
@@ -89,12 +107,14 @@ _SCENARIO = textwrap.dedent(
     loaded = plugin_info(manager)
     entry = registry.get_entry("brave_search")
     provider = get_provider("brave-pro")
+    tavily_provider = get_provider("tavily")
     active_provider = get_active_search_provider()
+    active_extract_provider = get_active_extract_provider()
     configured = load_config()
     rows = [
         row
         for row in _plugin_web_search_providers()
-        if row.get("web_backend") == "brave-pro"
+        if row.get("web_backend") in {"brave-pro", "tavily"}
     ]
 
     result.update(
@@ -105,9 +125,32 @@ _SCENARIO = textwrap.dedent(
             "handler": entry.handler.__module__,
             "toolset": entry.toolset,
             "provider_name": provider.name if provider else None,
+            "tavily_provider_name": tavily_provider.name if tavily_provider else None,
+            "provider_capabilities": {
+                "brave-pro": {
+                    "search": provider.supports_search() if provider else None,
+                    "extract": provider.supports_extract() if provider else None,
+                },
+                "tavily": {
+                    "search": (
+                        tavily_provider.supports_search()
+                        if tavily_provider
+                        else None
+                    ),
+                    "extract": (
+                        tavily_provider.supports_extract()
+                        if tavily_provider
+                        else None
+                    ),
+                },
+            },
             "provider_rows": rows,
             "active_provider": active_provider.name if active_provider else None,
+            "active_extract_provider": (
+                active_extract_provider.name if active_extract_provider else None
+            ),
             "configured_web": configured.get("web"),
+            "network_attempts": network_attempts,
         }
     )
     print(json.dumps(result))
@@ -149,6 +192,7 @@ def _run_scenario(tmp_path: Path, *, override_allowed: bool) -> dict:
     env.update(
         {
             "BRAVE_SEARCH_API_KEY": "not-a-real-key",
+            "TAVILY_API_KEY": "not-a-real-tavily-key",
             "HOME": str(tmp_path / "home"),
             "HERMES_HOME": str(hermes_home),
             "HERMES_ENABLE_PROJECT_PLUGINS": "0",
@@ -158,7 +202,6 @@ def _run_scenario(tmp_path: Path, *, override_allowed: bool) -> dict:
     for name in (
         "BRAVE_API_KEY",
         "HERMES_SAFE_MODE",
-        "TAVILY_API_KEY",
     ):
         env.pop(name, None)
 
@@ -188,11 +231,20 @@ def _assert_successful_load(result: dict) -> None:
     assert result["handler"] == "hermes_brave_search.tools"
     assert result["toolset"] == "brave_search"
     assert result["provider_name"] == "brave-pro"
+    assert result["tavily_provider_name"] == "tavily"
+    assert result["provider_capabilities"] == {
+        "brave-pro": {"search": True, "extract": False},
+        "tavily": {"search": False, "extract": True},
+    }
     assert result["active_provider"] == "brave-pro"
+    assert result["active_extract_provider"] == "tavily"
     assert result["configured_web"]["backend"] == "brave-pro"
     assert result["configured_web"]["search_backend"] == "brave-pro"
-    assert len(result["provider_rows"]) == 1
-    assert result["provider_rows"][0]["web_search_plugin_name"] == "brave-pro"
+    assert result["configured_web"]["extract_backend"] == "tavily"
+    assert {
+        row["web_search_plugin_name"] for row in result["provider_rows"]
+    } == {"brave-pro", "tavily"}
+    assert result["network_attempts"] == []
 
 
 def test_plugin_manager_denies_override_without_leaking_then_retries(tmp_path):
@@ -203,8 +255,10 @@ def test_plugin_manager_denies_override_without_leaking_then_retries(tmp_path):
     assert result["first_handler"] == "__main__"
     assert result["first_toolset"] == "web"
     assert result["first_provider_present"] is False
+    assert result["first_tavily_provider_present"] is False
     assert result["first_config"]["web"]["backend"] != "brave-pro"
     assert result["first_config"]["web"]["search_backend"] != "brave-pro"
+    assert result["first_config"]["web"].get("extract_backend") != "tavily"
     _assert_successful_load(result)
 
 
