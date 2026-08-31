@@ -13,7 +13,7 @@ if [[ -n "${HERMES_PROFILE:-}" ]]; then
     exit 1
   fi
   case "$PROFILE" in
-    hermes|test|tmp|root|sudo)
+    hermes|test|tmp|root)
       printf 'Reserved Hermes profile name: %q\n' "$HERMES_PROFILE" >&2
       exit 1
       ;;
