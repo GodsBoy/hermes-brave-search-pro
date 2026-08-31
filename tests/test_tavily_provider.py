@@ -145,8 +145,8 @@ def test_extract_returns_one_safe_error_per_url_without_key(monkeypatch):
 def test_extract_normalizes_http_timeout_transport_and_json_failures(
     monkeypatch,
 ):
-    secret = "tavily-secret-sentinel"
-    monkeypatch.setenv("TAVILY_API_KEY", secret)
+    sentinel = "redaction-sentinel"
+    monkeypatch.setenv("TAVILY_API_KEY", sentinel)
     provider = TavilyExtractProvider()
     url = "https://example.com/a"
 
@@ -155,9 +155,9 @@ def test_extract_normalizes_http_timeout_transport_and_json_failures(
         (FakeResponse({}, status_code=429), "Tavily rate limit reached (HTTP 429)"),
         (FakeResponse({}, status_code=432), "Tavily quota is unavailable (HTTP 432)"),
         (FakeResponse({}, status_code=500), "Tavily service failed (HTTP 500)"),
-        (FakeResponse(ValueError(secret)), "Tavily returned an invalid response"),
-        (httpx.TimeoutException(secret), "Tavily extract request timed out"),
-        (httpx.TransportError(secret), "Tavily extract request failed"),
+        (FakeResponse(ValueError(sentinel)), "Tavily returned an invalid response"),
+        (httpx.TimeoutException(sentinel), "Tavily extract request timed out"),
+        (httpx.TransportError(sentinel), "Tavily extract request failed"),
     ]
 
     for outcome, expected_error in cases:
@@ -171,7 +171,7 @@ def test_extract_normalizes_http_timeout_transport_and_json_failures(
         result = provider.extract([url])
 
         assert result[0]["error"] == expected_error
-        assert secret not in repr(result)
+        assert sentinel not in repr(result)
 
 
 def test_extract_fills_missing_response_rows(monkeypatch):
