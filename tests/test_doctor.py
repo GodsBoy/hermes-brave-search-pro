@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 import types
 
+from hermes_brave_search.compat import apply_runtime_compat
 from hermes_brave_search.doctor import (
     Check,
     _tavily_provider_status,
@@ -66,6 +67,19 @@ def test_tavily_provider_status_uses_registry_loader_and_capability(monkeypatch)
 
     assert _tavily_provider_status() is True
     assert calls == ["loader", "capability"]
+
+
+def test_tavily_provider_discovery_does_not_apply_runtime_config(monkeypatch):
+    config_updates = []
+    monkeypatch.setattr(
+        "hermes_brave_search.compat.ensure_recommended_web_config",
+        lambda *, force=False: config_updates.append(force) or ["web.backend"],
+    )
+    provider = types.SimpleNamespace(supports_extract=lambda: True)
+    _install_web_registry(monkeypatch, provider, loader=apply_runtime_compat)
+
+    assert _tavily_provider_status() is True
+    assert config_updates == []
 
 
 def test_tavily_provider_status_reports_unsupported_provider(monkeypatch):

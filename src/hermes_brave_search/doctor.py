@@ -13,6 +13,7 @@ from .compat import (
     TAVILY_BACKEND,
     _get_env_value,
     _has_brave_api_key,
+    _suspend_runtime_compat_writes,
     apply_runtime_compat,
 )
 from .constants import BRAVE_API_KEY_COMPAT_ENV, BRAVE_API_KEY_ENV
@@ -103,7 +104,8 @@ def _tavily_provider_status() -> bool | None:
         return None
 
     try:
-        _ensure_web_plugins_loaded()
+        with _suspend_runtime_compat_writes():
+            _ensure_web_plugins_loaded()
         provider = get_provider(TAVILY_BACKEND)
         if provider is None:
             return False
