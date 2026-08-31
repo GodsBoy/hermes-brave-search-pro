@@ -253,8 +253,7 @@ def write_fake_python(
         "import os\n"
         "import sys\n"
         'if sys.argv[1:2] == ["-c"]:\n'
-        f"    code = sys.argv[2].replace(\"sys.version_info\", {str(version)!r})\n"
-        '    exec(compile(code, "<installer-probe>", "exec"))\n'
+        f"    raise SystemExit(not ((3, 11) <= {version!r} < (3, 14)))\n"
         f"os.execv({real_python!r}, [{real_python!r}, *sys.argv[1:]])\n",
         encoding="utf-8",
     )
