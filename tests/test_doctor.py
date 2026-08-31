@@ -3,12 +3,18 @@ from __future__ import annotations
 import sys
 import types
 
-from hermes_brave_search.doctor import Check, main, run_checks
+from hermes_brave_search.compat import apply_runtime_compat
+from hermes_brave_search.doctor import (
+    Check,
+    _tavily_provider_status,
+    main,
+    run_checks,
+)
 
 
 def _configured_plugins() -> dict:
     return {
-        "enabled": ["brave-search", "web-tavily"],
+        "enabled": ["brave-search"],
         "entries": {
             "brave-search": {"allow_tool_override": True},
         },
@@ -35,10 +41,73 @@ def _install_config(
     monkeypatch.setitem(sys.modules, "hermes_cli.config", config_mod)
 
 
+def _install_web_registry(monkeypatch, provider, *, loader=None):
+    registry_mod = types.ModuleType("agent.web_search_registry")
+    registry_mod.get_provider = lambda name: (
+        provider if name == "tavily" else None
+    )  # type: ignore[attr-defined]
+    web_tools_mod = types.ModuleType("tools.web_tools")
+    web_tools_mod._ensure_web_plugins_loaded = loader or (  # type: ignore[attr-defined]
+        lambda: None
+    )
+    monkeypatch.setitem(sys.modules, "agent.web_search_registry", registry_mod)
+    monkeypatch.setitem(sys.modules, "tools.web_tools", web_tools_mod)
+
+
+def test_tavily_provider_status_uses_registry_loader_and_capability(monkeypatch):
+    calls = []
+    provider = types.SimpleNamespace(
+        supports_extract=lambda: calls.append("capability") or True,
+    )
+    _install_web_registry(
+        monkeypatch,
+        provider,
+        loader=lambda: calls.append("loader"),
+    )
+
+    assert _tavily_provider_status() is True
+    assert calls == ["loader", "capability"]
+
+
+def test_tavily_provider_discovery_does_not_apply_runtime_config(monkeypatch):
+    config_updates = []
+    monkeypatch.setattr(
+        "hermes_brave_search.compat.ensure_recommended_web_config",
+        lambda *, force=False: config_updates.append(force) or ["web.backend"],
+    )
+    provider = types.SimpleNamespace(supports_extract=lambda: True)
+    _install_web_registry(monkeypatch, provider, loader=apply_runtime_compat)
+
+    assert _tavily_provider_status() is True
+    assert config_updates == []
+
+
+def test_tavily_provider_status_reports_unsupported_provider(monkeypatch):
+    provider = types.SimpleNamespace(supports_extract=lambda: False)
+    _install_web_registry(monkeypatch, provider)
+
+    assert _tavily_provider_status() is False
+
+
+def test_tavily_provider_status_returns_unknown_on_discovery_failure(monkeypatch):
+    _install_web_registry(
+        monkeypatch,
+        types.SimpleNamespace(supports_extract=lambda: True),
+        loader=lambda: (_ for _ in ()).throw(RuntimeError("discovery failed")),
+    )
+
+    assert _tavily_provider_status() is None
+
+
 def test_doctor_checks_keys_plugins_permission_and_web_config(monkeypatch):
     monkeypatch.setattr(
         "hermes_brave_search.doctor._plugin_statuses",
-        lambda: {"brave-search": True, "web-tavily": True},
+        # A stale legacy plugin-list entry must not determine Tavily readiness.
+        lambda: {"brave-search": True, "web-tavily": False},
+    )
+    monkeypatch.setattr(
+        "hermes_brave_search.doctor._tavily_provider_status",
+        lambda: True,
     )
     config = {
         "plugins": _configured_plugins(),
@@ -58,7 +127,7 @@ def test_doctor_checks_keys_plugins_permission_and_web_config(monkeypatch):
         "brave-search plugin",
         "brave-search tool override",
         "TAVILY_API_KEY",
-        "web-tavily plugin",
+        "tavily provider",
         "web.backend",
         "web.search_backend",
         "web.extract_backend",
@@ -69,10 +138,14 @@ def test_doctor_checks_keys_plugins_permission_and_web_config(monkeypatch):
 def test_doctor_fails_when_override_permission_is_missing(monkeypatch, capsys):
     monkeypatch.setattr(
         "hermes_brave_search.doctor._plugin_statuses",
-        lambda: {"brave-search": True, "web-tavily": True},
+        lambda: {"brave-search": True},
+    )
+    monkeypatch.setattr(
+        "hermes_brave_search.doctor._tavily_provider_status",
+        lambda: True,
     )
     config = {
-        "plugins": {"enabled": ["brave-search", "web-tavily"]},
+        "plugins": {"enabled": ["brave-search"]},
         "web": {
             "backend": "brave-pro",
             "search_backend": "brave-pro",
@@ -91,7 +164,11 @@ def test_doctor_fails_when_override_permission_is_missing(monkeypatch, capsys):
 def test_doctor_reports_missing_tavily(monkeypatch, capsys):
     monkeypatch.setattr(
         "hermes_brave_search.doctor._plugin_statuses",
-        lambda: {"brave-search": True, "web-tavily": False},
+        lambda: {"brave-search": True},
+    )
+    monkeypatch.setattr(
+        "hermes_brave_search.doctor._tavily_provider_status",
+        lambda: False,
     )
     monkeypatch.delenv("TAVILY_API_KEY", raising=False)
     config = {
@@ -110,8 +187,8 @@ def test_doctor_reports_missing_tavily(monkeypatch, capsys):
     assert main([]) == 0
     output = capsys.readouterr().out
     assert "TAVILY_API_KEY" in output
-    assert "web-tavily plugin" in output
-    assert "hermes plugins enable web-tavily" in output
+    assert "tavily provider" in output
+    assert "hermes tools" in output
     assert "missing" in output
     assert "[advisory]" in output
 
@@ -119,7 +196,11 @@ def test_doctor_reports_missing_tavily(monkeypatch, capsys):
 def test_doctor_explicit_tavily_missing_key_is_fatal(monkeypatch, capsys):
     monkeypatch.setattr(
         "hermes_brave_search.doctor._plugin_statuses",
-        lambda: {"brave-search": True, "web-tavily": True},
+        lambda: {"brave-search": True},
+    )
+    monkeypatch.setattr(
+        "hermes_brave_search.doctor._tavily_provider_status",
+        lambda: True,
     )
     monkeypatch.delenv("TAVILY_API_KEY", raising=False)
     config = {
@@ -145,10 +226,14 @@ def test_doctor_explicit_tavily_missing_key_is_fatal(monkeypatch, capsys):
     assert "advisory" not in output
 
 
-def test_doctor_explicit_tavily_disabled_plugin_is_fatal(monkeypatch, capsys):
+def test_doctor_explicit_tavily_unsupported_provider_is_fatal(monkeypatch, capsys):
     monkeypatch.setattr(
         "hermes_brave_search.doctor._plugin_statuses",
-        lambda: {"brave-search": True, "web-tavily": False},
+        lambda: {"brave-search": True},
+    )
+    monkeypatch.setattr(
+        "hermes_brave_search.doctor._tavily_provider_status",
+        lambda: False,
     )
     monkeypatch.setenv("TAVILY_API_KEY", "tavily-key")
     config = {
@@ -163,7 +248,7 @@ def test_doctor_explicit_tavily_disabled_plugin_is_fatal(monkeypatch, capsys):
 
     assert main([]) == 1
     output = capsys.readouterr().out
-    assert "web-tavily plugin: not enabled" in output
+    assert "tavily provider: not registered" in output
 
 
 def test_doctor_non_tavily_extract_provider_keeps_tavily_advisory(
@@ -171,7 +256,11 @@ def test_doctor_non_tavily_extract_provider_keeps_tavily_advisory(
 ):
     monkeypatch.setattr(
         "hermes_brave_search.doctor._plugin_statuses",
-        lambda: {"brave-search": True, "web-tavily": False},
+        lambda: {"brave-search": True},
+    )
+    monkeypatch.setattr(
+        "hermes_brave_search.doctor._tavily_provider_status",
+        lambda: False,
     )
     monkeypatch.delenv("TAVILY_API_KEY", raising=False)
     config = {
@@ -197,9 +286,13 @@ def test_doctor_non_tavily_extract_provider_keeps_tavily_advisory(
     assert "All required Brave Search Pro checks passed." in output
 
 
-def test_doctor_explicit_tavily_unknown_plugin_is_fatal(monkeypatch, capsys):
+def test_doctor_explicit_tavily_unknown_provider_is_fatal(monkeypatch, capsys):
     monkeypatch.setattr(
         "hermes_brave_search.doctor._plugin_statuses",
+        lambda: None,
+    )
+    monkeypatch.setattr(
+        "hermes_brave_search.doctor._tavily_provider_status",
         lambda: None,
     )
     config = {
@@ -214,7 +307,7 @@ def test_doctor_explicit_tavily_unknown_plugin_is_fatal(monkeypatch, capsys):
 
     assert main([]) == 1
     output = capsys.readouterr().out
-    assert "web-tavily plugin: unable to verify" in output
+    assert "tavily provider: unable to verify" in output
     assert "[advisory]" not in output
 
 
@@ -223,7 +316,11 @@ def test_doctor_missing_brave_override_is_fatal_when_tavily_unselected(
 ):
     monkeypatch.setattr(
         "hermes_brave_search.doctor._plugin_statuses",
-        lambda: {"brave-search": True, "web-tavily": False},
+        lambda: {"brave-search": True},
+    )
+    monkeypatch.setattr(
+        "hermes_brave_search.doctor._tavily_provider_status",
+        lambda: False,
     )
     config = {
         "plugins": {"enabled": ["brave-search"]},
@@ -251,7 +348,11 @@ def test_doctor_missing_brave_override_is_fatal_when_tavily_unselected(
 def test_doctor_full_tavily_configuration_passes_main(monkeypatch, capsys):
     monkeypatch.setattr(
         "hermes_brave_search.doctor._plugin_statuses",
-        lambda: {"brave-search": True, "web-tavily": True},
+        lambda: {"brave-search": True},
+    )
+    monkeypatch.setattr(
+        "hermes_brave_search.doctor._tavily_provider_status",
+        lambda: True,
     )
     config = {
         "plugins": _configured_plugins(),

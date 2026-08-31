@@ -4,6 +4,7 @@ import pytest
 
 import hermes_brave_search
 from hermes_brave_search.provider import BraveProSearchProvider
+from hermes_brave_search.tavily import TavilyExtractProvider
 
 
 class FakeContext:
@@ -27,13 +28,37 @@ class RejectingContext(FakeContext):
         raise PermissionError("tool override denied")
 
 
-def test_register_adds_provider_and_tool():
+class FailingTavilyContext(FakeContext):
+    def register_web_search_provider(self, provider):
+        self.events.append(("provider", provider.name))
+        if provider.name == "tavily":
+            raise RuntimeError("Tavily provider registration failed")
+        self.web_providers.append(provider)
+
+
+def test_register_adds_both_providers_and_tool_after_successful_registration(
+    monkeypatch,
+):
     ctx = FakeContext()
+    compat_observations = []
+    monkeypatch.setattr(
+        hermes_brave_search,
+        "apply_runtime_compat",
+        lambda: compat_observations.append(
+            [provider.name for provider in ctx.web_providers]
+        ),
+    )
 
     hermes_brave_search.register(ctx)
 
-    assert len(ctx.web_providers) == 1
+    assert len(ctx.web_providers) == 2
     assert ctx.web_providers[0].name == "brave-pro"
+    assert ctx.web_providers[1].name == "tavily"
+    assert isinstance(ctx.web_providers[1], TavilyExtractProvider)
+    assert ctx.web_providers[0].supports_search() is True
+    assert ctx.web_providers[0].supports_extract() is False
+    assert ctx.web_providers[1].supports_search() is False
+    assert ctx.web_providers[1].supports_extract() is True
     assert len(ctx.tools) == 1
     assert ctx.tools[0]["name"] == "brave_search"
     assert ctx.tools[0]["toolset"] == "brave_search"
@@ -41,11 +66,22 @@ def test_register_adds_provider_and_tool():
     assert ctx.tools[0]["emoji"] == "🦁"
     assert ctx.tools[0]["override"] is True
     assert callable(ctx.tools[0]["check_fn"])
-    assert ctx.events == [("tool", "brave_search"), ("provider", "brave-pro")]
+    assert ctx.events == [
+        ("tool", "brave_search"),
+        ("provider", "brave-pro"),
+        ("provider", "tavily"),
+    ]
+    assert compat_observations == [["brave-pro", "tavily"]]
 
 
-def test_register_does_not_add_provider_when_tool_override_is_denied():
+def test_register_does_not_add_provider_when_tool_override_is_denied(monkeypatch):
     ctx = RejectingContext()
+    compat_calls = []
+    monkeypatch.setattr(
+        hermes_brave_search,
+        "apply_runtime_compat",
+        lambda: compat_calls.append(True),
+    )
 
     with pytest.raises(PermissionError, match="tool override denied"):
         hermes_brave_search.register(ctx)
@@ -53,6 +89,28 @@ def test_register_does_not_add_provider_when_tool_override_is_denied():
     assert ctx.events == [("tool", "brave_search")]
     assert ctx.tools == []
     assert ctx.web_providers == []
+    assert compat_calls == []
+
+
+def test_register_does_not_apply_compat_when_tavily_registration_fails(monkeypatch):
+    ctx = FailingTavilyContext()
+    compat_calls = []
+    monkeypatch.setattr(
+        hermes_brave_search,
+        "apply_runtime_compat",
+        lambda: compat_calls.append(True),
+    )
+
+    with pytest.raises(RuntimeError, match="Tavily provider registration failed"):
+        hermes_brave_search.register(ctx)
+
+    assert ctx.events == [
+        ("tool", "brave_search"),
+        ("provider", "brave-pro"),
+        ("provider", "tavily"),
+    ]
+    assert [provider.name for provider in ctx.web_providers] == ["brave-pro"]
+    assert compat_calls == []
 
 
 def test_provider_availability_uses_brave_key(monkeypatch):

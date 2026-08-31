@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 
 from .constants import BRAVE_API_KEY_COMPAT_ENV, BRAVE_API_KEY_ENV
@@ -11,6 +14,10 @@ BRAVE_PRO_BACKEND = "brave-pro"
 BRAVE_FREE_BACKEND = "brave-free"
 TAVILY_API_KEY_ENV = "TAVILY_API_KEY"
 TAVILY_BACKEND = "tavily"
+_RUNTIME_COMPAT_WRITES_ENABLED: ContextVar[bool] = ContextVar(
+    "runtime_compat_writes_enabled",
+    default=True,
+)
 
 
 @dataclass
@@ -28,14 +35,12 @@ class CompatReport:
 def _get_env_value(name: str) -> str | None:
     try:
         from hermes_cli.config import get_env_value  # type: ignore
+    except ImportError:
+        value = os.environ.get(name, "")
+    else:
+        value = get_env_value(name) or ""
 
-        value = get_env_value(name)
-        if value and (normalized := str(value).strip()):
-            return normalized
-    except Exception:
-        pass
-
-    value = os.environ.get(name, "").strip()
+    value = str(value).strip()
     return value or None
 
 
@@ -43,6 +48,17 @@ def _has_brave_api_key() -> bool:
     return bool(
         _get_env_value(BRAVE_API_KEY_ENV) or _get_env_value(BRAVE_API_KEY_COMPAT_ENV)
     )
+
+
+@contextmanager
+def _suspend_runtime_compat_writes() -> Iterator[None]:
+    """Keep provider discovery read-only for diagnostic callers."""
+
+    token = _RUNTIME_COMPAT_WRITES_ENABLED.set(False)
+    try:
+        yield
+    finally:
+        _RUNTIME_COMPAT_WRITES_ENABLED.reset(token)
 
 
 def ensure_recommended_web_config(*, force: bool = False) -> list[str]:
@@ -102,6 +118,8 @@ def apply_runtime_compat(*, force: bool = False) -> CompatReport:
     """Apply safe Brave Pro compatibility helpers without blocking plugin load."""
 
     report = CompatReport()
+    if not _RUNTIME_COMPAT_WRITES_ENABLED.get():
+        return report
 
     try:
         report.config_changed = ensure_recommended_web_config(force=force)
