@@ -173,6 +173,7 @@ def test_doctor_non_tavily_extract_provider_keeps_tavily_advisory(
         "hermes_brave_search.doctor._plugin_statuses",
         lambda: {"brave-search": True, "web-tavily": False},
     )
+    monkeypatch.delenv("TAVILY_API_KEY", raising=False)
     config = {
         "plugins": _configured_plugins(),
         "web": {
