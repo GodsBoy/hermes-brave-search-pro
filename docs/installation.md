@@ -4,7 +4,7 @@
 
 - Hermes Agent with plugin support
 - Brave Search API key
-- Tavily API key and Hermes' bundled `web-tavily` plugin if you want the recommended `web_extract` pairing. Tavily offers a free API key at <https://app.tavily.com/>.
+- An optional Tavily API key if you want keyed `web_extract` through this plugin. Tavily offers a free API key at <https://app.tavily.com/>.
 
 ## Canonical Hermes install
 
@@ -67,7 +67,7 @@ backend.
 This plugin provides Brave Search Pro for discovery. Brave is search-only in Hermes, so the recommended default pairing is:
 
 - `BRAVE_SEARCH_API_KEY` for Brave-backed `web_search` and `brave_search`.
-- `web-tavily` plus `TAVILY_API_KEY` for Tavily-backed `web_extract`.
+- This plugin's optional keyed `tavily` provider plus `TAVILY_API_KEY` for Tavily-backed `web_extract`.
 
 Get keys here:
 
@@ -76,10 +76,12 @@ Get keys here:
 
 Tavily's free plan currently includes 1,000 API credits per month and does not require a credit card.
 
-Add the keys to the Hermes environment:
+Add the required Brave key to the Hermes environment. Add the separate Tavily
+key only when you want optional keyed extraction:
 
 ```bash
 export BRAVE_SEARCH_API_KEY=bsa-your-key-here
+# Optional keyed Tavily extraction:
 export TAVILY_API_KEY=tvly-your-key-here
 ```
 
@@ -87,20 +89,19 @@ For gateways or services, make sure those variables are available to the running
 
 ```bash
 BRAVE_SEARCH_API_KEY=bsa-your-key-here
+# Optional keyed Tavily extraction:
 TAVILY_API_KEY=tvly-your-key-here
 ```
 
 `BRAVE_API_KEY` is also accepted for compatibility, but `BRAVE_SEARCH_API_KEY` is the documented name.
 
-Enable the optional Tavily extraction plugin when you want `web_extract` to use Tavily:
-
-```bash
-hermes plugins enable web-tavily
-```
-
 ## Use Brave for search and Tavily for extract
 
-The plugin applies safe defaults when Hermes loads it. If Brave is credentialed, missing or still-free web search settings are moved to Brave Pro. If Tavily is credentialed and no extraction provider is selected, extraction is set to Tavily. The separate bundled `web-tavily` plugin must still be enabled for Tavily `web_extract` to run.
+The `brave-search` plugin registers Brave Pro for search and an optional keyed
+Tavily provider for extraction. If Brave is credentialed, missing or still-free
+web search settings are moved to Brave Pro. If Tavily is credentialed and no
+extraction provider is selected, extraction is set to Tavily. `TAVILY_API_KEY`
+remains separate and optional, and no second plugin needs to be enabled.
 
 Run the doctor explicitly to check both sides:
 
@@ -124,7 +125,7 @@ The interactive Hermes tools flow remains available for visual confirmation:
 hermes tools
 ```
 
-Then choose **Reconfigure an existing tool's provider or API key**, then **Web Search & Scraping**. **Brave Search Pro [pro]** should show as the active search provider. Tavily is the recommended extraction backend, but it needs `web-tavily` enabled and `TAVILY_API_KEY` present before `web_extract` can use it.
+Then choose **Reconfigure an existing tool's provider or API key**, then **Web Search & Scraping**. **Brave Search Pro [pro]** should show as the active search provider. Tavily is the recommended optional extraction backend when `TAVILY_API_KEY` is present.
 
 Equivalent manual config:
 
@@ -132,7 +133,6 @@ Equivalent manual config:
 plugins:
   enabled:
     - brave-search
-    - web-tavily  # optional, only needed for Tavily web_extract
   entries:
     brave-search:
       allow_tool_override: true
@@ -148,7 +148,6 @@ Or set those keys directly:
 ```bash
 hermes config set web.backend brave-pro
 hermes config set web.search_backend brave-pro
-hermes plugins enable web-tavily  # optional, only needed for Tavily web_extract
 hermes config set web.extract_backend tavily
 ```
 

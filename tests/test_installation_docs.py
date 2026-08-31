@@ -113,8 +113,22 @@ def test_manual_configuration_includes_permission_and_brave_backends() -> None:
     enabled_plugins = set(
         re.findall(r"(?m)^    - ([a-z0-9-]+)\s*$", enabled_block.group("items"))
     )
-    assert {"brave-search", "web-tavily"} <= enabled_plugins
+    assert enabled_plugins == {"brave-search"}
     assert 'extract_backend: "tavily"' in config
+
+
+def test_tavily_is_owned_by_this_plugin_and_remains_optional() -> None:
+    for path in (
+        ROOT / "README.md",
+        ROOT / "docs" / "installation.md",
+        ROOT / "after-install.md",
+        ROOT / "examples" / "config.yaml",
+    ):
+        text = read(path)
+        assert "web-tavily" not in text, path
+        assert "TAVILY_API_KEY" in text, path
+        assert "optional" in text.lower(), path
+        assert "brave-search" in text, path
 
 
 def test_after_install_does_not_claim_private_picker_patching() -> None:
@@ -269,6 +283,9 @@ def test_symlink_installer_prints_default_permission_and_restart_flow(
     assert "hermes gateway restart" in output
     assert f"backends in {hermes_home / 'config.yaml'}" in output
     assert 'backend: "brave-pro"' in output
+    assert "TAVILY_API_KEY" in output
+    assert "Tavily extraction is optional" in output
+    assert "web-tavily" not in output
 
 
 def test_symlink_installer_links_both_surfaces_and_is_idempotent(

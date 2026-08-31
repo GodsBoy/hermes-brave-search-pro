@@ -1,9 +1,9 @@
-# Example Hermes configuration for Brave Search Pro plus Tavily extraction.
+# Example Hermes configuration for Brave Search Pro plus optional keyed Tavily
+# extraction. Set TAVILY_API_KEY in the Hermes environment before using it.
 
 plugins:
   enabled:
     - brave-search
-    - web-tavily
   entries:
     brave-search:
       allow_tool_override: true

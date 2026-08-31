@@ -9,14 +9,17 @@ from .compat import apply_runtime_compat
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Configure Hermes to prefer Brave Search Pro for web search.",
+        description=(
+            "Configure Hermes to prefer Brave Search Pro and optional Tavily "
+            "extraction."
+        ),
     )
     parser.add_argument(
         "--force",
         action="store_true",
         help=(
-            "Overwrite existing web backend settings with Brave Pro and Tavily "
-            "extraction config. Enable web-tavily separately for web_extract."
+            "Overwrite existing web backend settings with Brave Pro and optional "
+            "keyed Tavily extraction config."
         ),
     )
     args = parser.parse_args(argv)
@@ -30,7 +33,10 @@ def main(argv: list[str] | None = None) -> int:
     if report.config_changed:
         print("Updated Hermes config: " + ", ".join(report.config_changed))
     else:
-        print("Hermes Brave Search Pro config already looks correct.")
+        print(
+            "Hermes Brave Search Pro config already looks correct; optional "
+            "Tavily extraction remains separate."
+        )
 
     return 0
 

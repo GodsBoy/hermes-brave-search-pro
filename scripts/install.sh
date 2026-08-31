@@ -204,10 +204,14 @@ open Hermes Desktop Settings and enable Brave Search for this profile.
 Then add your Brave key to the environment Hermes runs with:
   BRAVE_SEARCH_API_KEY=bsa-your-key-here
 
-And set search/extract backends in $CONFIG_PATH:
+And set the Brave search backends in $CONFIG_PATH:
   web:
     backend: "brave-pro"
     search_backend: "brave-pro"
+
+Tavily extraction is optional and registered by this plugin. To enable keyed
+extraction, add TAVILY_API_KEY to the Hermes environment and set:
+  web:
     extract_backend: "tavily"
 
 Run the profile-scoped doctor:

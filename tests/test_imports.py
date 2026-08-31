@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import subprocess
 import sys
 import tomllib
@@ -59,8 +60,12 @@ def test_release_metadata_is_aligned():
         if package["name"] == project["name"]
     )
 
-    assert package_version == "0.1.8"
+    assert package_version == "0.1.9"
     assert f"version: {package_version}\n" in (root / "plugin.yaml").read_text()
+    dashboard_manifest = json.loads(
+        (root / "dashboard" / "manifest.json").read_text()
+    )
+    assert dashboard_manifest["version"] == package_version
     assert locked_package["version"] == package_version
     assert project["requires-python"] == ">=3.11,<3.14"
     assert lockfile["requires-python"] == ">=3.11, <3.14"
@@ -78,6 +83,9 @@ def test_plugin_manifest_only_requires_brave_key():
 
     assert "BRAVE_SEARCH_API_KEY" in plugin_manifest
     assert "TAVILY_API_KEY" not in plugin_manifest
+    assert "provides_web_providers:" in plugin_manifest
+    assert "  - brave-pro" in plugin_manifest
+    assert "  - tavily" in plugin_manifest
 
 
 def test_ci_installs_current_hermes_editably():
