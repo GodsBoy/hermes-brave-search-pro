@@ -5,25 +5,8 @@ from __future__ import annotations
 from collections import defaultdict, deque
 from typing import Any
 
-try:  # pragma: no cover - exercised inside Hermes, shimmed in package tests.
-    from agent.web_search_provider import WebSearchProvider
-except ImportError:  # pragma: no cover
-
-    class WebSearchProvider:  # type: ignore[no-redef]
-        """Small compatibility shim for local package tests outside Hermes."""
-
-        @property
-        def display_name(self) -> str:
-            return self.name
-
-        def supports_search(self) -> bool:
-            return True
-
-        def supports_extract(self) -> bool:
-            return False
-
-
 from .compat import TAVILY_API_KEY_ENV, _get_env_value
+from .provider import WebSearchProvider
 
 TAVILY_EXTRACT_ENDPOINT = "https://api.tavily.com/extract"
 TAVILY_HTTP_TIMEOUT_SECONDS = 60.0
@@ -121,8 +104,10 @@ class TavilyExtractProvider(WebSearchProvider):
 
         normalized: list[dict[str, Any]] = []
         for url in urls:
-            if successes[url]:
-                row = successes[url].popleft()
+            success_rows = successes.get(url)
+            failure_rows = failures.get(url)
+            if success_rows:
+                row = success_rows.popleft()
                 content = row.get("raw_content")
                 content = content if isinstance(content, str) else ""
                 title = row.get("title")
@@ -135,8 +120,8 @@ class TavilyExtractProvider(WebSearchProvider):
                         "metadata": {},
                     }
                 )
-            elif failures[url]:
-                failures[url].popleft()
+            elif failure_rows:
+                failure_rows.popleft()
                 normalized.extend(
                     _error_results([url], "Tavily could not extract this URL")
                 )
