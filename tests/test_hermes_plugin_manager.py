@@ -14,6 +14,10 @@ _PLUGIN_ENTRY_POINT = """\
 [hermes_agent.plugins]
 brave-search = hermes_brave_search
 """
+_PLUGIN_CAPABILITY_ENTRY_POINT = """\
+[hermes_agent.plugin_capabilities]
+brave-search.tools.override = hermes_brave_search
+"""
 _PLUGIN_METADATA = """\
 Metadata-Version: 2.1
 Name: hermes-brave-search
@@ -35,6 +39,7 @@ _SCENARIO = textwrap.dedent(
     from hermes_cli.config import load_config
     from hermes_cli.plugins import PluginManager
     from hermes_cli.tools_config import _plugin_web_search_providers
+    from hermes_brave_search import TavilyExtractProvider
     from tools.registry import registry
 
     network_attempts = []
@@ -53,16 +58,26 @@ _SCENARIO = textwrap.dedent(
     socket.socket = NetworkGuardSocket
 
     hermes_home = Path(sys.argv[1])
-    start_allowed = sys.argv[2] == "allowed"
+    start_grant = sys.argv[2]
     config_path = hermes_home / "config.yaml"
 
-    def write_config(allowed):
+    def write_config(grant):
+        entry = {}
+        if grant == "canonical":
+            entry["granted_capabilities"] = ["tools.override"]
+        elif grant == "legacy":
+            entry["allow_tool_override"] = True
         config = {
             "plugins": {
                 "enabled": ["brave-search"],
                 "entries": {
-                    "brave-search": {"allow_tool_override": allowed},
+                    "brave-search": entry,
                 },
+            },
+            "web": {
+                "backend": "brave-pro",
+                "search_backend": "brave-pro",
+                "extract_backend": "tavily",
             },
         }
         config_path.write_text(json.dumps(config), encoding="utf-8")
@@ -84,7 +99,7 @@ _SCENARIO = textwrap.dedent(
         handler=builtin_brave_search,
     )
 
-    write_config(start_allowed)
+    write_config(start_grant)
     manager = PluginManager()
     manager.discover_and_load()
     first = plugin_info(manager)
@@ -100,8 +115,8 @@ _SCENARIO = textwrap.dedent(
         "first_config": load_config(),
     }
 
-    if not start_allowed:
-        write_config(True)
+    if start_grant == "denied":
+        write_config("canonical")
         manager.discover_and_load(force=True)
 
     loaded = plugin_info(manager)
@@ -110,6 +125,7 @@ _SCENARIO = textwrap.dedent(
     tavily_provider = get_provider("tavily")
     active_provider = get_active_search_provider()
     active_extract_provider = get_active_extract_provider()
+    legacy_tavily_provider = TavilyExtractProvider()
     configured = load_config()
     rows = [
         row
@@ -126,6 +142,17 @@ _SCENARIO = textwrap.dedent(
             "toolset": entry.toolset,
             "provider_name": provider.name if provider else None,
             "tavily_provider_name": tavily_provider.name if tavily_provider else None,
+            "tavily_provider_type": (
+                f"{type(tavily_provider).__module__}."
+                f"{type(tavily_provider).__qualname__}"
+                if tavily_provider
+                else None
+            ),
+            "legacy_tavily_import_type": (
+                f"{type(legacy_tavily_provider).__module__}."
+                f"{type(legacy_tavily_provider).__qualname__}"
+            ),
+            "legacy_tavily_registered": legacy_tavily_provider is tavily_provider,
             "provider_capabilities": {
                 "brave-pro": {
                     "search": provider.supports_search() if provider else None,
@@ -170,7 +197,7 @@ def _hermes_python() -> str:
     )
 
 
-def _run_scenario(tmp_path: Path, *, override_allowed: bool) -> dict:
+def _run_scenario(tmp_path: Path, *, grant: str) -> dict:
     repo_root = Path(__file__).resolve().parents[1]
     hermes_home = tmp_path / "hermes"
     hermes_home.mkdir()
@@ -179,7 +206,7 @@ def _run_scenario(tmp_path: Path, *, override_allowed: bool) -> dict:
     metadata_dir.mkdir(parents=True)
     (metadata_dir / "METADATA").write_text(_PLUGIN_METADATA, encoding="utf-8")
     (metadata_dir / "entry_points.txt").write_text(
-        _PLUGIN_ENTRY_POINT,
+        _PLUGIN_ENTRY_POINT + _PLUGIN_CAPABILITY_ENTRY_POINT,
         encoding="utf-8",
     )
 
@@ -211,7 +238,7 @@ def _run_scenario(tmp_path: Path, *, override_allowed: bool) -> dict:
             "-c",
             _SCENARIO,
             str(hermes_home),
-            "allowed" if override_allowed else "denied",
+            grant,
         ],
         check=False,
         capture_output=True,
@@ -232,9 +259,16 @@ def _assert_successful_load(result: dict) -> None:
     assert result["toolset"] == "brave_search"
     assert result["provider_name"] == "brave-pro"
     assert result["tavily_provider_name"] == "tavily"
+    assert result["tavily_provider_type"] == (
+        "plugins.web.tavily.provider.TavilyWebSearchProvider"
+    )
+    assert result["legacy_tavily_import_type"] == (
+        "hermes_brave_search.tavily.TavilyExtractProvider"
+    )
+    assert result["legacy_tavily_registered"] is False
     assert result["provider_capabilities"] == {
         "brave-pro": {"search": True, "extract": False},
-        "tavily": {"search": False, "extract": True},
+        "tavily": {"search": True, "extract": True},
     }
     assert result["active_provider"] == "brave-pro"
     assert result["active_extract_provider"] == "tavily"
@@ -248,22 +282,23 @@ def _assert_successful_load(result: dict) -> None:
 
 
 def test_plugin_manager_denies_override_without_leaking_then_retries(tmp_path):
-    result = _run_scenario(tmp_path, override_allowed=False)
+    result = _run_scenario(tmp_path, grant="denied")
 
-    assert result["first_enabled"] is False
-    assert "allow_tool_override" in result["first_error"]
+    assert result["first_enabled"] is True
+    assert result["first_error"] is None
     assert result["first_handler"] == "__main__"
     assert result["first_toolset"] == "web"
-    assert result["first_provider_present"] is False
-    assert result["first_tavily_provider_present"] is False
-    assert result["first_config"]["web"]["backend"] != "brave-pro"
-    assert result["first_config"]["web"]["search_backend"] != "brave-pro"
-    assert result["first_config"]["web"].get("extract_backend") != "tavily"
+    assert result["first_provider_present"] is True
+    assert result["first_tavily_provider_present"] is True
+    assert result["first_config"]["web"]["backend"] == "brave-pro"
+    assert result["first_config"]["web"]["search_backend"] == "brave-pro"
+    assert result["first_config"]["web"]["extract_backend"] == "tavily"
     _assert_successful_load(result)
 
 
-def test_plugin_manager_loads_with_override_permission(tmp_path):
-    result = _run_scenario(tmp_path, override_allowed=True)
+@pytest.mark.parametrize("grant", ["canonical", "legacy"])
+def test_plugin_manager_loads_with_override_permission(tmp_path, grant):
+    result = _run_scenario(tmp_path, grant=grant)
 
     assert result["first_enabled"] is True
     assert result["first_error"] is None

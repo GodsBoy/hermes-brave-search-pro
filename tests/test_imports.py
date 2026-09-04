@@ -37,6 +37,17 @@ def test_entry_point_loads_module_with_register():
     assert hasattr(loaded, "TavilyExtractProvider")
 
 
+def test_entry_point_declares_tools_override_capability():
+    matches = [
+        ep
+        for ep in entry_points(group="hermes_agent.plugin_capabilities")
+        if ep.name == "brave-search.tools.override"
+    ]
+
+    assert matches
+    assert matches[0].value == "hermes_brave_search"
+
+
 def test_directory_plugin_shim_exposes_register():
     shim_path = Path(__file__).resolve().parents[1] / "__init__.py"
     spec = importlib.util.spec_from_file_location("brave_directory_plugin", shim_path)
@@ -60,7 +71,7 @@ def test_release_metadata_is_aligned():
         if package["name"] == project["name"]
     )
 
-    assert package_version == "0.1.9"
+    assert package_version == "0.2.0"
     assert f"version: {package_version}\n" in (root / "plugin.yaml").read_text()
     dashboard_manifest = json.loads(
         (root / "dashboard" / "manifest.json").read_text()
@@ -81,11 +92,15 @@ def test_release_metadata_is_aligned():
 def test_plugin_manifest_only_requires_brave_key():
     plugin_manifest = (Path(__file__).resolve().parents[1] / "plugin.yaml").read_text()
 
+    assert "manifest_version: 2" in plugin_manifest
+    assert "api_version: 1" in plugin_manifest
     assert "BRAVE_SEARCH_API_KEY" in plugin_manifest
     assert "TAVILY_API_KEY" not in plugin_manifest
     assert "provides_web_providers:" in plugin_manifest
     assert "  - brave-pro" in plugin_manifest
-    assert "  - tavily" in plugin_manifest
+    assert "  - tavily" not in plugin_manifest
+    assert "capabilities:" in plugin_manifest
+    assert "  - tools.override" in plugin_manifest
 
 
 def test_ci_installs_current_hermes_editably():

@@ -63,7 +63,7 @@ class BraveProSearchProvider(WebSearchProvider):
             "badge": "pro",
             "tag": (
                 "Brave-backed discovery for Hermes web_search. "
-                "This plugin also registers optional keyed Tavily extraction."
+                "Extraction remains provided by Hermes web plugins."
             ),
             "env_vars": [
                 {

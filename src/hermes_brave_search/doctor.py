@@ -82,7 +82,7 @@ def _plugin_enabled(statuses: dict[str, bool] | None, name: str) -> bool | None:
 
 
 def _tavily_provider_status() -> bool | None:
-    """Return whether the registered Tavily provider supports extraction.
+    """Return whether Hermes' bundled Tavily provider is ready for extraction.
 
     Provider registration is owned by Hermes' web provider registry, so this
     check must not infer readiness from a plugin name in the CLI list. Hermes
@@ -96,38 +96,61 @@ def _tavily_provider_status() -> bool | None:
         return None
 
     try:
-        from tools.web_tools import _ensure_web_plugins_loaded
+        from plugins.web.tavily.provider import TavilyWebSearchProvider
+    except ModuleNotFoundError as exc:
+        if exc.name == "plugins.web.tavily.provider":
+            return False
+        return None
     except Exception:
         return None
 
-    if not callable(_ensure_web_plugins_loaded):
+    try:
+        from tools.web_tools import _ensure_web_plugins_loaded, _provider_is_ready
+    except Exception:
+        return None
+
+    if not callable(_ensure_web_plugins_loaded) or not callable(_provider_is_ready):
         return None
 
     try:
         with _suspend_runtime_compat_writes():
             _ensure_web_plugins_loaded()
         provider = get_provider(TAVILY_BACKEND)
-        if provider is None:
+        if not isinstance(provider, TavilyWebSearchProvider):
             return False
         supports_extract = getattr(provider, "supports_extract", None)
         if not callable(supports_extract):
             return False
-        return bool(supports_extract())
+        if not supports_extract():
+            return False
+        return bool(_provider_is_ready(provider))
     except Exception:
         return None
 
 
 def _tool_override_allowed(config: dict) -> bool:
-    plugins = config.get("plugins", {})
-    if not isinstance(plugins, dict):
-        return False
-    entries = plugins.get("entries", {})
-    if not isinstance(entries, dict):
-        return False
-    brave_entry = entries.get("brave-search", {})
-    return (
-        isinstance(brave_entry, dict)
-        and brave_entry.get("allow_tool_override") is True
+    try:
+        from hermes_cli.plugin_capabilities import plugin_capability_granted
+    except Exception:
+        plugins = config.get("plugins", {})
+        if not isinstance(plugins, dict):
+            return False
+        entries = plugins.get("entries", {})
+        if not isinstance(entries, dict):
+            return False
+        brave_entry = entries.get("brave-search", {})
+        if not isinstance(brave_entry, dict):
+            return False
+        granted = brave_entry.get("granted_capabilities", [])
+        return (
+            isinstance(granted, list)
+            and "tools.override" in granted
+        ) or brave_entry.get("allow_tool_override") is True
+
+    return plugin_capability_granted(
+        "brave-search",
+        "tools.override",
+        config=config,
     )
 
 
@@ -153,9 +176,15 @@ def _tavily_provider_check(
     blocking: bool,
 ) -> Check:
     if status is True:
-        detail = "registered and supports extraction"
+        detail = (
+            "Hermes-bundled provider is registered, supports extraction, and is "
+            "ready"
+        )
     elif status is False:
-        detail = "not registered or does not support extraction. Run: hermes tools"
+        detail = (
+            "Hermes-bundled provider is not registered, does not support "
+            "extraction, or is not ready. Run: hermes tools"
+        )
     else:
         detail = "unable to verify. Run: hermes tools"
     return Check("tavily provider", status is True, detail, blocking=blocking)
@@ -173,10 +202,12 @@ def run_checks() -> list[Check]:
     brave_key = _has_brave_api_key()
     tavily_key = bool(_get_env_value(TAVILY_API_KEY_ENV))
     override_allowed = _tool_override_allowed(config)
-    backend = web.get("backend")
     search_backend = web.get("search_backend")
     extract_backend = web.get("extract_backend")
     tavily_selected = extract_backend == TAVILY_BACKEND
+    extract_configured = isinstance(extract_backend, str) and bool(
+        extract_backend.strip()
+    )
 
     return [
         Check(
@@ -187,7 +218,7 @@ def run_checks() -> list[Check]:
         _plugin_check(
             "brave-search",
             brave_enabled,
-            "hermes plugins enable brave-search --allow-tool-override",
+            "hermes plugins enable brave-search",
         ),
         Check(
             "brave-search tool override",
@@ -195,8 +226,8 @@ def run_checks() -> list[Check]:
             "granted"
             if override_allowed
             else (
-                "missing. Run: hermes plugins enable brave-search "
-                "--allow-tool-override"
+                "missing. Run: hermes plugins enable brave-search, then grant "
+                "tools.override when prompted"
             ),
         ),
         Check(
@@ -204,14 +235,15 @@ def run_checks() -> list[Check]:
             tavily_key,
             "present"
             if tavily_key
-            else "missing. Recommended for web_extract. Free key: https://app.tavily.com/",
-            blocking=tavily_selected,
+            else (
+                "missing. Optional: Hermes-bundled Tavily supports keyless "
+                "web_extract when selected."
+            ),
+            blocking=False,
         ),
-        _tavily_provider_check(tavily_provider_status, blocking=tavily_selected),
-        Check(
-            "web.backend",
-            backend == BRAVE_PRO_BACKEND,
-            f"{backend!r}" if backend else "not set",
+        _tavily_provider_check(
+            tavily_provider_status,
+            blocking=tavily_selected,
         ),
         Check(
             "web.search_backend",
@@ -220,23 +252,23 @@ def run_checks() -> list[Check]:
         ),
         Check(
             "web.extract_backend",
-            extract_backend == TAVILY_BACKEND,
-            f"{extract_backend!r}" if extract_backend else "not set",
-            blocking=tavily_selected,
+            extract_configured,
+            f"{extract_backend!r}" if extract_configured else "not set",
+            blocking=False,
         ),
     ]
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Check Hermes Brave Search Pro and Tavily extraction setup.",
+        description="Check Hermes Brave Search Pro and bundled Tavily setup.",
     )
     parser.add_argument(
         "--fix",
         action="store_true",
         help=(
-            "Apply safe provider config defaults: Brave Pro for search and Tavily "
-            "for extraction when the relevant API keys are present."
+            "Apply a safe Brave Pro web.search_backend default when a Brave "
+            "API key is present."
         ),
     )
     parser.add_argument(
@@ -258,7 +290,7 @@ def main(argv: list[str] | None = None) -> int:
     print("\nBrave Search Pro doctor")
     checks = run_checks()
     for check in checks:
-        advisory = " [advisory]" if not check.blocking else ""
+        advisory = " [advisory]" if not check.ok and not check.blocking else ""
         print(f"{check.mark} {check.name}: {check.detail}{advisory}")
 
     if any(not check.ok and check.blocking for check in checks):
@@ -268,16 +300,16 @@ def main(argv: list[str] | None = None) -> int:
             "~/.hermes/.env."
         )
         print(
-            "- Run hermes plugins enable brave-search --allow-tool-override, "
-            "then restart the gateway."
+            "- Run hermes plugins enable brave-search, then grant the declared "
+            "tools.override capability and restart the gateway."
         )
         print(
             "- Run with --fix after adding keys to apply the recommended "
             "provider config."
         )
         print(
-            "- Run hermes tools to verify a registered Tavily provider supports "
-            "web_extract."
+            "- Run hermes plugins capabilities brave-search to review consent, "
+            "then run hermes tools to verify bundled Tavily supports web_extract."
         )
         print("- Restart the gateway after changing plugin, env, or provider config.")
         return 1

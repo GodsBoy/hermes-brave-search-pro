@@ -194,7 +194,7 @@ cat <<EOF
 
 Next steps:
 EOF
-print_hermes_step "plugins enable brave-search --allow-tool-override"
+print_hermes_step "plugins enable brave-search"
 print_hermes_step "gateway restart"
 cat <<EOF
 
@@ -204,13 +204,16 @@ open Hermes Desktop Settings and enable Brave Search for this profile.
 Then add your Brave key to the environment Hermes runs with:
   BRAVE_SEARCH_API_KEY=bsa-your-key-here
 
-And set the Brave search backends in $CONFIG_PATH:
+And set the Brave search backend in $CONFIG_PATH:
   web:
-    backend: "brave-pro"
     search_backend: "brave-pro"
 
-Tavily extraction is optional and registered by this plugin. To enable keyed
-extraction, add TAVILY_API_KEY to the Hermes environment and set:
+Approve the declared tools.override capability when Hermes prompts. Existing
+allow_tool_override grants remain valid for legacy installations.
+
+Tavily extraction is optional and registered by Hermes' bundled web-tavily
+plugin. To enable keyed extraction, add TAVILY_API_KEY to the Hermes environment
+and set:
   web:
     extract_backend: "tavily"
 

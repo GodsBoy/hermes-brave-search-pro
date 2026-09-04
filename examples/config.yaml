@@ -1,14 +1,12 @@
-# Example Hermes configuration for Brave Search Pro plus optional keyed Tavily
-# extraction. Set TAVILY_API_KEY in the Hermes environment before using it.
+# Example Hermes configuration for Brave Search Pro plus Hermes' bundled
+# web-tavily extraction provider. TAVILY_API_KEY is optional for keyed access.
+# Run `hermes plugins enable brave-search` first. Hermes manages both the
+# granted_capabilities entry and matching capabilities_consent receipt.
 
 plugins:
   enabled:
     - brave-search
-  entries:
-    brave-search:
-      allow_tool_override: true
 
 web:
-  backend: "brave-pro"
   search_backend: "brave-pro"
   extract_backend: "tavily"

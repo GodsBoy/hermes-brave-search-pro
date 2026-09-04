@@ -1,12 +1,15 @@
 name: brave-search
-version: 0.1.9
+version: 0.2.0
+manifest_version: 2
+api_version: 1
 description: Brave Search Pro provider and advanced Brave search tool for Hermes Agent
 kind: backend
 provides_tools:
   - brave_search
+capabilities:
+  - tools.override
 provides_web_providers:
   - brave-pro
-  - tavily
 requires_env:
   - name: BRAVE_SEARCH_API_KEY
     description: Brave Search API key for Brave-backed web_search and brave_search

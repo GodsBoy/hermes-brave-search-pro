@@ -35,7 +35,7 @@ def test_fresh_install_guidance_completes_backend_before_optional_desktop() -> N
         assert_in_order(
             text,
             "hermes plugins install GodsBoy/hermes-brave-search-pro --no-enable",
-            "hermes plugins enable brave-search --allow-tool-override",
+            "hermes plugins enable brave-search",
             "hermes gateway restart",
             "## Desktop Brave Search",
             "scripts/install-desktop.sh",
@@ -49,7 +49,7 @@ def test_direct_and_profile_guidance_complete_backend_before_optional_desktop() 
             text,
             "git clone https://github.com/GodsBoy/hermes-brave-search-pro.git \\\n"
             "  ~/.hermes/plugins/brave-search",
-            "hermes plugins enable brave-search --allow-tool-override",
+            "hermes plugins enable brave-search",
             "hermes gateway restart",
             "## Desktop Brave Search",
             "~/.hermes/plugins/brave-search/scripts/install-desktop.sh",
@@ -58,8 +58,7 @@ def test_direct_and_profile_guidance_complete_backend_before_optional_desktop() 
             text,
             "git clone https://github.com/GodsBoy/hermes-brave-search-pro.git \\\n"
             "  ~/.hermes/profiles/myprofile/plugins/brave-search",
-            "hermes --profile myprofile plugins enable "
-            "brave-search --allow-tool-override",
+            "hermes --profile myprofile plugins enable brave-search",
             "hermes --profile myprofile gateway restart",
             "python3 ~/.hermes/profiles/myprofile/plugins/brave-search/"
             "scripts/doctor.py",
@@ -70,7 +69,7 @@ def test_direct_and_profile_guidance_complete_backend_before_optional_desktop() 
         )
 
 
-def test_no_install_example_enables_without_explicit_permission() -> None:
+def test_install_examples_use_capability_consent_flow() -> None:
     install_pattern = re.compile(
         r"plugins install[^\n]*\s--enable(?:\s|$)"
     )
@@ -83,28 +82,36 @@ def test_no_install_example_enables_without_explicit_permission() -> None:
         text = read(path)
         assert install_pattern.search(text) is None, path
         for command in enable_pattern.findall(text):
-            assert "--allow-tool-override" in command, (path, command)
+            assert "--allow-tool-override" not in command, (path, command)
+
+    combined = "\n".join(read(path) for path in DOC_PATHS)
+    assert "tools.override" in combined
+    assert "granted_capabilities" in combined
+    assert "capabilities_consent" in combined
+    assert "allow_tool_override" in combined
+    assert "legacy" in combined.lower()
 
 
-def test_manual_configuration_includes_permission_and_brave_backends() -> None:
+def test_manual_configuration_uses_consent_and_brave_backends() -> None:
     for path in (ROOT / "README.md", ROOT / "docs" / "installation.md"):
         text = read(path)
-        assert "allow_tool_override: true" in text
-        assert 'backend: "brave-pro"' in text
+        assert "hermes plugins enable brave-search" in text
+        assert "granted_capabilities" in text
+        assert "capabilities_consent" in text
+        assert "granted_capabilities:" not in text
+        assert "capabilities_consent:" not in text
         assert 'search_backend: "brave-pro"' in text
-        for block in re.findall(r"```yaml\n(.*?)```", text, re.DOTALL):
-            if "- brave-search" in block:
-                assert "allow_tool_override: true" in block, path
 
     config = read(ROOT / "examples" / "config.yaml")
     assert_in_order(
         config,
-        "entries:",
-        "brave-search:",
-        "allow_tool_override: true",
-        'backend: "brave-pro"',
+        "hermes plugins enable brave-search",
+        "granted_capabilities",
+        "capabilities_consent",
         'search_backend: "brave-pro"',
     )
+    assert "granted_capabilities:" not in config
+    assert "capabilities_consent:" not in config
     enabled_block = re.search(
         r"(?m)^plugins:\n  enabled:\n(?P<items>(?:    - [^\n]+\n)+)",
         config,
@@ -117,7 +124,7 @@ def test_manual_configuration_includes_permission_and_brave_backends() -> None:
     assert 'extract_backend: "tavily"' in config
 
 
-def test_tavily_is_owned_by_this_plugin_and_remains_optional() -> None:
+def test_tavily_is_owned_by_hermes_and_remains_optional() -> None:
     for path in (
         ROOT / "README.md",
         ROOT / "docs" / "installation.md",
@@ -125,7 +132,8 @@ def test_tavily_is_owned_by_this_plugin_and_remains_optional() -> None:
         ROOT / "examples" / "config.yaml",
     ):
         text = read(path)
-        assert "web-tavily" not in text, path
+        assert "web-tavily" in text, path
+        assert "bundled" in text.lower(), path
         assert "TAVILY_API_KEY" in text, path
         assert "optional" in text.lower(), path
         assert "brave-search" in text, path
@@ -142,7 +150,7 @@ def test_after_install_includes_matching_default_and_named_profile_flows() -> No
     assert_in_order(
         text,
         "### Default profile",
-        "hermes plugins enable brave-search --allow-tool-override",
+        "hermes plugins enable brave-search",
         "hermes gateway restart",
         "## Desktop Brave Search",
         "~/.hermes/plugins/brave-search/scripts/install-desktop.sh",
@@ -151,7 +159,7 @@ def test_after_install_includes_matching_default_and_named_profile_flows() -> No
         text,
         "### Named profile",
         "hermes --profile myprofile plugins enable ",
-        "brave-search --allow-tool-override",
+        "brave-search",
         "hermes --profile myprofile gateway restart",
         "## Desktop Brave Search",
         "~/.hermes/profiles/myprofile/plugins/brave-search/scripts/install-desktop.sh",
@@ -279,13 +287,15 @@ def test_symlink_installer_prints_default_permission_and_restart_flow(
 ) -> None:
     output = run_installer(tmp_path)
     hermes_home = tmp_path / ".hermes"
-    assert "hermes plugins enable brave-search --allow-tool-override" in output
+    assert "hermes plugins enable brave-search" in output
+    assert "--allow-tool-override" not in output
+    assert "tools.override" in output
     assert "hermes gateway restart" in output
-    assert f"backends in {hermes_home / 'config.yaml'}" in output
-    assert 'backend: "brave-pro"' in output
+    assert f"search backend in {hermes_home / 'config.yaml'}" in output
+    assert 'search_backend: "brave-pro"' in output
     assert "TAVILY_API_KEY" in output
     assert "Tavily extraction is optional" in output
-    assert "web-tavily" not in output
+    assert "web-tavily" in output
 
 
 def test_symlink_installer_links_both_surfaces_and_is_idempotent(
@@ -312,12 +322,10 @@ def test_symlink_installer_prints_profile_permission_and_restart_flow(
 ) -> None:
     output = run_installer(tmp_path, profile="MyProfile")
     profile_home = tmp_path / ".hermes" / "profiles" / "myprofile"
-    assert (
-        "hermes --profile myprofile plugins enable "
-        "brave-search --allow-tool-override" in output
-    )
+    assert "hermes --profile myprofile plugins enable brave-search" in output
+    assert "--allow-tool-override" not in output
     assert "hermes --profile myprofile gateway restart" in output
-    assert f"backends in {profile_home / 'config.yaml'}" in output
+    assert f"search backend in {profile_home / 'config.yaml'}" in output
     assert f"HERMES_HOME={profile_home}" in output
     assert f"{profile_home / 'plugins/brave-search/scripts/doctor.py'}" in output
 

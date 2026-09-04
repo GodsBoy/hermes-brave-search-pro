@@ -64,9 +64,10 @@ def _suspend_runtime_compat_writes() -> Iterator[None]:
 def ensure_recommended_web_config(*, force: bool = False) -> list[str]:
     """Persist safe Brave Pro web defaults when the plugin is installed.
 
-    The function is intentionally conservative. It only replaces missing values
-    or the built-in Brave Free backend. It does not overwrite a user-selected
-    non-Brave provider.
+    The function is intentionally conservative. It only replaces a missing or
+    built-in Brave Free search backend. The shared backend and extraction
+    backend remain user-owned because Hermes uses the shared value as an
+    extraction fallback.
     """
 
     if not _has_brave_api_key():
@@ -85,28 +86,12 @@ def ensure_recommended_web_config(*, force: bool = False) -> list[str]:
 
     changed: list[str] = []
 
-    backend = web.get("backend")
-    if (
-        force or backend in (None, "", BRAVE_FREE_BACKEND)
-    ) and backend != BRAVE_PRO_BACKEND:
-        web["backend"] = BRAVE_PRO_BACKEND
-        changed.append("web.backend")
-
     search_backend = web.get("search_backend")
     if (
         force or search_backend in (None, "", BRAVE_FREE_BACKEND)
     ) and search_backend != BRAVE_PRO_BACKEND:
         web["search_backend"] = BRAVE_PRO_BACKEND
         changed.append("web.search_backend")
-
-    extract_backend = web.get("extract_backend")
-    if (
-        _get_env_value(TAVILY_API_KEY_ENV)
-        and (force or extract_backend in (None, ""))
-        and extract_backend != TAVILY_BACKEND
-    ):
-        web["extract_backend"] = TAVILY_BACKEND
-        changed.append("web.extract_backend")
 
     if changed:
         save_config(config)

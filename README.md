@@ -13,9 +13,9 @@
 
 Use Brave Search Pro as the `web_search` backend in [Hermes Agent](https://github.com/NousResearch/hermes-agent). The plugin also adds an explicit `brave_search` tool for Brave's LLM Context API, Place Search, media, news, discussions and raw API responses.
 
-Brave handles discovery. This plugin also registers an optional keyed Tavily
-provider for `web_extract`; `TAVILY_API_KEY` remains a separate, optional
-credential.
+Brave handles discovery. Current Hermes v0.21.0 git builds provide the bundled
+`web-tavily` provider for `web_extract`; `TAVILY_API_KEY` remains a separate,
+optional credential.
 
 ## Contents
 
@@ -33,13 +33,18 @@ credential.
 
 ## Quick start
 
-Install the backend without enabling it, then grant the required built-in tool override permission:
+Install the backend without enabling it, then enable it and approve the declared
+`tools.override` capability when Hermes prompts:
 
 ```bash
 hermes plugins install GodsBoy/hermes-brave-search-pro --no-enable
-hermes plugins enable brave-search --allow-tool-override
+hermes plugins enable brave-search
 hermes gateway restart
 ```
+
+The original `v2026.8.31` Hermes tag predates bundled Tavily. If
+`hermes plugins list` does not show `web-tavily`, update Hermes before selecting
+`tavily` for extraction.
 
 The installer prompts for `BRAVE_SEARCH_API_KEY`. If you skipped the prompt, add the key to the environment used by Hermes, commonly `~/.hermes/.env` for a gateway installation:
 
@@ -50,7 +55,6 @@ BRAVE_SEARCH_API_KEY=bsa-your-key-here
 Then select Brave Pro explicitly:
 
 ```bash
-hermes config set web.backend brave-pro
 hermes config set web.search_backend brave-pro
 hermes gateway restart
 ```
@@ -65,13 +69,12 @@ hermes tools
 The provider should appear as:
 
 ```text
-Brave Search Pro [pro] - Brave-backed discovery for Hermes web_search. This plugin also registers optional keyed Tavily extraction.
+Brave Search Pro [pro] - Brave-backed discovery for Hermes web_search.
 ```
 
 ## What the plugin provides
 
 - A Hermes web-search provider named `brave-pro`
-- An optional keyed Tavily extraction provider named `tavily`
 - An advanced Hermes tool named `brave_search`
 - Brave LLM Context API chunks through `/res/v1/llm/context`
 - Brave Place Search, local Explore Mode, POI details and POI descriptions
@@ -81,7 +84,10 @@ Brave Search Pro [pro] - Brave-backed discovery for Hermes web_search. This plug
 - A shared Brave client with structured errors and normalised responses
 - An optional Hermes Desktop page
 
-The plugin intentionally overrides Hermes' built-in `brave_search` tool. Hermes therefore requires `--allow-tool-override` when the plugin is enabled.
+The plugin intentionally overrides Hermes' built-in `brave_search` tool. It
+declares the `tools.override` capability so current Hermes versions can show and
+record consent during install, enable, and update. Existing installations with
+the legacy `allow_tool_override: true` setting continue to work unchanged.
 
 ## Use it
 
@@ -111,8 +117,10 @@ Hermes configures search and extraction independently:
 | `web_extract` | Tavily or another extraction provider | `web.extract_backend` |
 | Brave-specific retrieval | `brave_search` tool | Plugin tool |
 
-This plugin registers the optional keyed `tavily` provider for `web_extract`.
-To use it, set `TAVILY_API_KEY` in the Hermes environment and select it:
+Current Hermes v0.21.0 git builds bundle the `web-tavily` plugin, which owns the
+`tavily` provider used for `web_extract`. This plugin does not register or replace it.
+To use keyed Tavily extraction, set `TAVILY_API_KEY` in the Hermes environment
+and select it:
 
 ```bash
 hermes config set web.extract_backend tavily
@@ -147,21 +155,15 @@ See [Advanced modes](docs/installation.md#advanced-modes) for context budgets, l
 The plugin applies conservative defaults when it loads:
 
 - Missing search settings, or settings still using `brave-free`, move to `brave-pro` when Brave is credentialed.
-- `web.extract_backend` moves to `tavily` only when Tavily is credentialed and no extraction backend is selected.
-- The `tavily` provider is owned by this plugin; `TAVILY_API_KEY` is optional and remains separate from the required Brave key.
+- Existing extraction settings are preserved. Select `tavily` explicitly when you want Hermes' bundled provider.
+- The bundled `web-tavily` plugin owns the `tavily` provider; `TAVILY_API_KEY` is optional and remains separate from the required Brave key.
 
-Explicit configuration:
+Enable the plugin with `hermes plugins enable brave-search`. Hermes records the
+`granted_capabilities` entry and matching `capabilities_consent` receipt for the
+declared `tools.override` capability. Configure only the web routing by hand:
 
 ```yaml
-plugins:
-  enabled:
-    - brave-search
-  entries:
-    brave-search:
-      allow_tool_override: true
-
 web:
-  backend: "brave-pro"
   search_backend: "brave-pro"
   extract_backend: "tavily"
 ```
@@ -169,7 +171,6 @@ web:
 Equivalent commands:
 
 ```bash
-hermes config set web.backend brave-pro
 hermes config set web.search_backend brave-pro
 hermes config set web.extract_backend tavily
 ```
@@ -188,7 +189,7 @@ hermes gateway restart
 ```bash
 git clone https://github.com/GodsBoy/hermes-brave-search-pro.git \
   ~/.hermes/plugins/brave-search
-hermes plugins enable brave-search --allow-tool-override
+hermes plugins enable brave-search
 hermes gateway restart
 ```
 
@@ -197,7 +198,7 @@ hermes gateway restart
 ```bash
 git clone https://github.com/GodsBoy/hermes-brave-search-pro.git \
   ~/.hermes/profiles/myprofile/plugins/brave-search
-hermes --profile myprofile plugins enable brave-search --allow-tool-override
+hermes --profile myprofile plugins enable brave-search
 hermes --profile myprofile gateway restart
 python3 ~/.hermes/profiles/myprofile/plugins/brave-search/scripts/doctor.py
 ```
@@ -206,7 +207,7 @@ python3 ~/.hermes/profiles/myprofile/plugins/brave-search/scripts/doctor.py
 
 ```bash
 ./scripts/install.sh
-hermes plugins enable brave-search --allow-tool-override
+hermes plugins enable brave-search
 hermes gateway restart
 ```
 
@@ -271,14 +272,13 @@ The doctor checks:
 
 - Brave and Tavily credentials
 - Plugin enablement and tool override permission
-- `web.backend`, `web.search_backend` and `web.extract_backend`
-- The optional keyed Tavily extraction provider
+- `web.search_backend` and `web.extract_backend`
+- Hermes' bundled Tavily extraction provider
 
 Common fixes:
 
 ```bash
-hermes plugins enable brave-search --allow-tool-override
-hermes config set web.backend brave-pro
+hermes plugins enable brave-search
 hermes config set web.search_backend brave-pro
 hermes config set web.extract_backend tavily
 hermes gateway restart
