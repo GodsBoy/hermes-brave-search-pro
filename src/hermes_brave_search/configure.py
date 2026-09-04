@@ -10,16 +10,18 @@ from .compat import apply_runtime_compat
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description=(
-            "Configure Hermes to prefer Brave Search Pro and optional Tavily "
-            "extraction."
+            "Configure Hermes web search routing for Brave Search Pro. Existing "
+            "extraction settings are preserved; select bundled Tavily explicitly "
+            "when desired."
         ),
     )
     parser.add_argument(
         "--force",
         action="store_true",
         help=(
-            "Overwrite existing web backend settings with Brave Pro and optional "
-            "keyed Tavily extraction config."
+            "Overwrite existing web search routing with Brave Search Pro. Existing "
+            "extraction settings are preserved; select bundled Tavily explicitly "
+            "when desired."
         ),
     )
     args = parser.parse_args(argv)

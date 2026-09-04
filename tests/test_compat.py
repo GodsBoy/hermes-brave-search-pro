@@ -13,7 +13,13 @@ from hermes_brave_search.compat import (
 
 def test_ensure_recommended_web_config_sets_safe_defaults(monkeypatch):
     saved = {}
-    config = {"web": {"backend": "brave-free", "search_backend": "brave-free"}}
+    config = {
+        "web": {
+            "backend": "brave-free",
+            "search_backend": "brave-free",
+            "extract_backend": "firecrawl",
+        }
+    }
 
     config_mod = types.ModuleType("hermes_cli.config")
     config_mod.get_env_value = lambda key: "present"  # type: ignore[attr-defined]
@@ -29,12 +35,39 @@ def test_ensure_recommended_web_config_sets_safe_defaults(monkeypatch):
 
     changed = ensure_recommended_web_config()
 
-    assert changed == ["web.backend", "web.search_backend", "web.extract_backend"]
+    assert changed == ["web.search_backend"]
     assert saved["web"] == {
-        "backend": "brave-pro",
+        "backend": "brave-free",
         "search_backend": "brave-pro",
-        "extract_backend": "tavily",
+        "extract_backend": "firecrawl",
     }
+
+
+def test_ensure_recommended_web_config_keeps_shared_backend_unset_without_extraction(
+    monkeypatch,
+):
+    saved = {}
+    config = {"web": {"search_backend": ""}}
+
+    config_mod = types.ModuleType("hermes_cli.config")
+    config_mod.get_env_value = (  # type: ignore[attr-defined]
+        lambda key: {
+            "BRAVE_SEARCH_API_KEY": "brave-key",
+            "TAVILY_API_KEY": "tavily-key",
+        }.get(key)
+    )
+    config_mod.load_config = lambda: config  # type: ignore[attr-defined]
+    config_mod.save_config = lambda value: saved.update(value)  # type: ignore[attr-defined]
+
+    hermes_cli = types.ModuleType("hermes_cli")
+    hermes_cli.config = config_mod  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "hermes_cli", hermes_cli)
+    monkeypatch.setitem(sys.modules, "hermes_cli.config", config_mod)
+
+    assert ensure_recommended_web_config(force=True) == [
+        "web.search_backend",
+    ]
+    assert saved["web"] == {"search_backend": "brave-pro"}
 
 
 def test_ensure_recommended_web_config_does_not_override_other_providers(monkeypatch):
@@ -70,7 +103,7 @@ def test_ensure_recommended_web_config_does_not_override_other_providers(monkeyp
 
 def test_compat_report_changed_tracks_config_updates():
     assert CompatReport().changed is False
-    assert CompatReport(config_changed=["web.backend"]).changed is True
+    assert CompatReport(config_changed=["web.search_backend"]).changed is True
 
 
 def test_get_env_value_does_not_borrow_process_key_after_scoped_miss(

@@ -13,24 +13,24 @@ __all__ = ["BraveProSearchProvider", "TavilyExtractProvider", "register"]
 
 
 def register(ctx) -> None:
-    """Register the Brave provider and the advanced Brave tool with Hermes."""
+    """Register Brave search and the optional advanced Brave tool."""
 
     brave_provider = BraveProSearchProvider()
-    tavily_provider = TavilyExtractProvider()
-    ctx.register_tool(
-        name="brave_search",
-        toolset="brave_search",
-        schema=BRAVE_SEARCH_SCHEMA,
-        handler=brave_search_tool,
-        check_fn=brave_provider.is_available,
-        requires_env=[_BRAVE_API_KEY_ENV],
-        emoji="🦁",
-        override=True,
-        description=(
-            "Search Brave Search Pro across web, answer context, media, news, "
-            "discussions, suggestions, and raw modes."
-        ),
-    )
+    has_capability = getattr(ctx, "has_capability", None)
+    if not callable(has_capability) or has_capability("tools.override"):
+        ctx.register_tool(
+            name="brave_search",
+            toolset="brave_search",
+            schema=BRAVE_SEARCH_SCHEMA,
+            handler=brave_search_tool,
+            check_fn=brave_provider.is_available,
+            requires_env=[_BRAVE_API_KEY_ENV],
+            emoji="🦁",
+            override=True,
+            description=(
+                "Search Brave Search Pro across web, answer context, media, news, "
+                "discussions, suggestions, and raw modes."
+            ),
+        )
     ctx.register_web_search_provider(brave_provider)
-    ctx.register_web_search_provider(tavily_provider)
     apply_runtime_compat()

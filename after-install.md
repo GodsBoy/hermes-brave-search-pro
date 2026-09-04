@@ -1,20 +1,22 @@
 # Brave Search Pro installed
 
-This plugin works best with Brave for search. It also owns an optional keyed
-Tavily extraction provider for `web_extract`; `TAVILY_API_KEY` remains a
-separate optional credential. Hermes Desktop is also optional: finish the
+This plugin works best with Brave for search. Current Hermes v0.21.0 git builds
+own the bundled `web-tavily` provider for `web_extract`; `TAVILY_API_KEY` remains
+a separate optional credential. Hermes Desktop is also optional: finish the
 backend setup first, then add the local renderer only if you want the Desktop
 page.
 
 ## Finish backend setup
 
-Enable the backend with its intentional built-in tool override permission, then
-restart the active gateway. Use the same profile for every backend command.
+Enable the backend and approve its declared `tools.override` capability when
+Hermes prompts, then restart the active gateway. Use the same profile for every
+backend command. Hermes records consent under `granted_capabilities`; the legacy
+`allow_tool_override: true` setting remains valid for existing users.
 
 ### Default profile
 
 ```bash
-hermes plugins enable brave-search --allow-tool-override
+hermes plugins enable brave-search
 hermes gateway restart
 ```
 
@@ -24,7 +26,7 @@ Replace `myprofile` with your profile name. The plugin path, installer profile,
 enable command, and gateway restart must all use that same profile.
 
 ```bash
-hermes --profile myprofile plugins enable brave-search --allow-tool-override
+hermes --profile myprofile plugins enable brave-search
 hermes --profile myprofile gateway restart
 ```
 
@@ -84,7 +86,7 @@ optional, separate extraction integration. The Desktop surface uses the active
 profile, so switched profiles need their own current, enabled, credentialed
 Python backend. For a remote backend, install the renderer locally, then deploy
 or update the Python plugin on the remote active profile separately, enable it
-with `--allow-tool-override`, and restart that remote gateway after its backend
+and approve `tools.override`, then restart that remote gateway after its backend
 route changes. Desktop loading does not automatically import a project Python
 plugin into that gateway.
 
@@ -118,11 +120,11 @@ BRAVE_SEARCH_API_KEY=bsa-your-key-here
 TAVILY_API_KEY=tvly-your-key-here
 ```
 
-The plugin also applies safe Brave Pro backend defaults after Hermes grants its tool override:
+The plugin also applies safe Brave Pro search defaults after Hermes grants its tool override:
 
-- `web.backend` and `web.search_backend` are set to `brave-pro` when they are missing or still set to `brave-free`.
-- `web.extract_backend` is set to `tavily` when Tavily is credentialed and no extraction provider is selected.
-- This plugin registers the optional keyed `tavily` provider; `TAVILY_API_KEY` remains separate from the Brave key.
+- `web.search_backend` is set to `brave-pro` when it is missing or still set to `brave-free`; the shared `web.backend` value remains user-owned.
+- Existing `web.extract_backend` selections are preserved.
+- Hermes' bundled `web-tavily` plugin registers `tavily`; `TAVILY_API_KEY` remains separate from the Brave key.
 - Current Hermes owns provider picker visibility, and explicit Brave Pro backend settings select **Brave Search Pro [pro]**.
 
 Run the doctor to check the full Brave plus Tavily setup:
@@ -144,7 +146,6 @@ python3 ~/.hermes/plugins/brave-search/scripts/doctor.py --fix
 Manual equivalent:
 
 ```bash
-hermes config set web.backend brave-pro
 hermes config set web.search_backend brave-pro
 hermes config set web.extract_backend tavily
 ```
