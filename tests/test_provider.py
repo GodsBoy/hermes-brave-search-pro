@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import httpx
 import pytest
 
 import hermes_brave_search
@@ -129,8 +130,8 @@ def test_provider_is_search_only():
 def test_provider_delegates_to_client(monkeypatch):
     calls = {}
 
-    def fake_search(self, query, mode="both", limit=5):
-        calls.update({"query": query, "mode": mode, "limit": limit})
+    def fake_search(self, query, mode="both", limit=5, **kwargs):
+        calls.update({"query": query, "mode": mode, "limit": limit, **kwargs})
         return {
             "success": True,
             "data": {
@@ -152,7 +153,7 @@ def test_provider_delegates_to_client(monkeypatch):
 
     result = BraveProSearchProvider().search("hermes", limit=3)
 
-    assert result == {
+    assert {"success": result["success"], "data": {"web": result["data"]["web"]}} == {
         "success": True,
         "data": {
             "web": [
@@ -165,7 +166,18 @@ def test_provider_delegates_to_client(monkeypatch):
             ],
         },
     }
-    assert calls == {"query": "hermes", "mode": "web", "limit": 3}
+    assert result["data"]["llm_context"] == [
+        {"title": "Context", "url": "", "snippets": ["S"]}
+    ]
+    assert calls == {
+        "query": "hermes",
+        "mode": "both",
+        "limit": 3,
+        "context_count": 5,
+        "max_urls": 5,
+        "max_tokens": 4096,
+        "max_tokens_per_url": 1024,
+    }
 
 
 def test_setup_schema_prompts_for_brave_key():
@@ -173,3 +185,92 @@ def test_setup_schema_prompts_for_brave_key():
 
     assert schema["name"] == "Brave Search Pro"
     assert schema["env_vars"][0]["key"] == "BRAVE_SEARCH_API_KEY"
+
+
+@pytest.mark.parametrize("failed_endpoint", [None, "context", "web"])
+def test_provider_both_requests_and_partial_failure(monkeypatch, failed_endpoint):
+    from hermes_brave_search.constants import (
+        BRAVE_LLM_CONTEXT_ENDPOINT,
+        BRAVE_SEARCH_ENDPOINT,
+    )
+
+    monkeypatch.setenv("BRAVE_SEARCH_API_KEY", "synthetic-key")
+    calls = []
+
+    def respond(method, url, params):
+        endpoint = "web" if url == BRAVE_SEARCH_ENDPOINT else "context"
+        assert url in {BRAVE_SEARCH_ENDPOINT, BRAVE_LLM_CONTEXT_ENDPOINT}
+        calls.append((endpoint, params))
+        payload = (
+            {
+                "web": {
+                    "results": [
+                        {
+                            "title": "A",
+                            "url": "https://a.test",
+                            "description": "Web result",
+                        }
+                    ]
+                }
+            }
+            if endpoint == "web"
+            else {
+                "grounding": {
+                    "generic": [
+                        {
+                            "title": "A",
+                            "url": "https://a.test",
+                            "snippets": ["Context result"],
+                        }
+                    ]
+                }
+            }
+        )
+        return httpx.Response(
+            422 if endpoint == failed_endpoint else 200,
+            json=payload,
+            request=httpx.Request(method, url),
+        )
+
+    monkeypatch.setattr(
+        httpx, "get", lambda url, params, **kw: respond("GET", url, params)
+    )
+    monkeypatch.setattr(
+        httpx, "post", lambda url, json, **kw: respond("POST", url, json)
+    )
+
+    result = BraveProSearchProvider().search("hermes", limit=3)
+
+    assert calls[0] == ("web", {"q": "hermes", "count": 3})
+    if failed_endpoint == "web":
+        assert result["success"] is False
+        assert len(calls) == 1
+        assert "422" in result["error"]
+    else:
+        assert len(calls) == 2
+        assert calls[1] == (
+            "context",
+            {
+                "q": "hermes",
+                "count": 5,
+                "maximum_number_of_urls": 5,
+                "maximum_number_of_tokens": 4096,
+                "maximum_number_of_tokens_per_url": 1024,
+            },
+        )
+        assert result["success"] is True
+        assert result["data"]["web"] == [
+            {
+                "title": "A",
+                "url": "https://a.test",
+                "description": "Web result",
+                "position": 1,
+            }
+        ]
+        if failed_endpoint == "context":
+            assert result["data"]["llm_context"] == []
+            assert "422" in result["data"]["llm_context_error"]
+        else:
+            assert result["data"]["llm_context"][0]["snippets"] == ["Context result"]
+            assert "llm_context_error" not in result["data"]
+    assert "synthetic-key" not in str(result)

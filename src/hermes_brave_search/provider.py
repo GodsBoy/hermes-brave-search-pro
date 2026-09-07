@@ -50,12 +50,15 @@ class BraveProSearchProvider(WebSearchProvider):
     def search(self, query: str, limit: int = 5) -> dict[str, Any]:
         from .client import BraveSearchClient
 
-        result = BraveSearchClient().search(query=query, mode="web", limit=limit)
-        if not result.get("success"):
-            return result
-
-        data = result.get("data", {})
-        return {"success": True, "data": {"web": data.get("web", [])}}
+        return BraveSearchClient().search(
+            query=query,
+            mode="both",
+            limit=limit,
+            context_count=5,
+            max_urls=5,
+            max_tokens=4096,
+            max_tokens_per_url=1024,
+        )
 
     def get_setup_schema(self) -> dict[str, Any]:
         return {
