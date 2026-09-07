@@ -153,7 +153,7 @@ def test_provider_delegates_to_client(monkeypatch):
 
     result = BraveProSearchProvider().search("hermes", limit=3)
 
-    assert {"success": result["success"], "data": {"web": result["data"]["web"]}} == {
+    assert result == {
         "success": True,
         "data": {
             "web": [
@@ -164,11 +164,9 @@ def test_provider_delegates_to_client(monkeypatch):
                     "position": 1,
                 }
             ],
+            "llm_context": [{"title": "Context", "url": "", "snippets": ["S"]}],
         },
     }
-    assert result["data"]["llm_context"] == [
-        {"title": "Context", "url": "", "snippets": ["S"]}
-    ]
     assert calls == {
         "query": "hermes",
         "mode": "both",
@@ -274,3 +272,38 @@ def test_provider_both_requests_and_partial_failure(monkeypatch, failed_endpoint
             assert result["data"]["llm_context"][0]["snippets"] == ["Context result"]
             assert "llm_context_error" not in result["data"]
     assert "synthetic-key" not in str(result)
+
+
+@pytest.mark.parametrize("context_json", ["null", "[]", '"invalid"', "42", "true"])
+def test_provider_preserves_web_when_context_json_is_not_an_object(
+    monkeypatch, context_json
+):
+    monkeypatch.setenv("BRAVE_SEARCH_API_KEY", "synthetic-key")
+    calls = []
+
+    def fake_get(url, **kwargs):
+        calls.append("web")
+        return httpx.Response(
+            200,
+            json={"web": {"results": [{"title": "A", "url": "https://a.test"}]}},
+            request=httpx.Request("GET", url),
+        )
+
+    def fake_post(url, **kwargs):
+        calls.append("context")
+        return httpx.Response(
+            200, content=context_json, request=httpx.Request("POST", url)
+        )
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+    monkeypatch.setattr(httpx, "post", fake_post)
+
+    result = BraveProSearchProvider().search("hermes")
+
+    assert result["success"] is True
+    assert result["data"]["web"][0]["url"] == "https://a.test"
+    assert result["data"]["llm_context"] == []
+    assert result["data"]["llm_context_error"] == (
+        "Brave context returned an invalid response"
+    )
+    assert calls == ["web", "context"]

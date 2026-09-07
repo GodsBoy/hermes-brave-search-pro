@@ -133,6 +133,10 @@ _SCENARIO = textwrap.dedent(
         calls.append({"endpoint": "context", "params": params})
         query = params.get("q")
         status = 422 if query == "context failure" else 200
+        if query == "malformed context":
+            return httpx.Response(
+                200, content="null", request=httpx.Request("POST", url)
+            )
         payload = (
             {"error": "synthetic context failure"}
             if status != 200
@@ -175,6 +179,7 @@ _SCENARIO = textwrap.dedent(
     ]
 
     web_failure = dispatch("web failure")
+    malformed_context = dispatch("malformed context")
     web_failure_calls = [
         call for call in calls if call["params"].get("q") == "web failure"
     ]
@@ -192,6 +197,7 @@ _SCENARIO = textwrap.dedent(
                 "context_failure_second": context_failure_second,
                 "context_failure_calls": context_failure_calls,
                 "web_failure": web_failure,
+                "malformed_context": malformed_context,
                 "web_failure_calls": web_failure_calls,
                 "network_attempts": network_attempts,
             }
@@ -332,6 +338,11 @@ def test_hermes_web_search_dispatches_combined_results_and_caches_envelope(tmp_p
     ]
 
     web_failure = result["web_failure"]
+    malformed_context = result["malformed_context"]
+    assert malformed_context["success"] is True
+    assert malformed_context["data"]["web"][0]["title"] == "malformed context result 1"
+    assert malformed_context["data"]["llm_context"] == []
+    assert "invalid response" in malformed_context["data"]["llm_context_error"]
     assert web_failure["success"] is False
     assert "422" in web_failure["error"]
     assert result["web_failure_calls"] == [
