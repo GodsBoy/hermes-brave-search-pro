@@ -53,4 +53,4 @@ jobs:
           npm --prefix "$RUNNER_TEMP/hermes-agent" ci \
             --workspace apps/desktop --ignore-scripts
       - name: Test current Hermes integrations
-        run: uv run pytest tests/test_hermes_plugin_manager.py tests/test_desktop_hermes_integration.py
+        run: uv run pytest tests/test_hermes_plugin_manager.py tests/test_desktop_hermes_integration.py tests/test_hermes_web_search.py
