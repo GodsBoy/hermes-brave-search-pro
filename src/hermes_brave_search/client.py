@@ -341,7 +341,12 @@ class BraveSearchClient:
             "llm_context": [],
         }
         if context_result["success"]:
-            data["llm_context"] = self._normalise_llm_context(context_result["payload"])
+            if isinstance(context_result["payload"], dict):
+                data["llm_context"] = self._normalise_llm_context(
+                    context_result["payload"]
+                )
+            else:
+                data["llm_context_error"] = "Brave context returned an invalid response"
         else:
             data["llm_context_error"] = context_result["error"]
 
@@ -723,9 +728,7 @@ class BraveSearchClient:
     def _normalise_nested_results(
         self, payload: dict[str, Any], key: str
     ) -> list[dict[str, Any]]:
-        return [
-            item for item in nested_results(payload, key) if isinstance(item, dict)
-        ]
+        return [item for item in nested_results(payload, key) if isinstance(item, dict)]
 
     def _normalise_media_results(
         self, payload: dict[str, Any], key: str

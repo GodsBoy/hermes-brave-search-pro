@@ -98,6 +98,22 @@ web_search(query="Hermes Agent plugins", limit=5)   # Brave Search Pro
 web_extract(urls=["https://example.com/article"])  # Your configured extract backend
 ```
 
+With Brave Pro selected, ordinary `web_search` returns combined discovery links
+and LLM Context results. On a cache miss, a successful web request is followed by
+a separate context request, adding API usage and latency compared with web-only
+search. Existing transient-error retries still apply. The context request uses
+fixed provider budgets of up to 5 context results and source URLs, 4,096 total
+tokens and 1,024 tokens per URL. These are API budgets, not exact output token
+guarantees.
+
+If context retrieval fails, the response retains web results with an empty
+`data.llm_context` list and a `data.llm_context_error` warning. A web failure
+returns an error without requesting context. Hermes can reuse cached responses,
+including their context warnings, until its search cache expires.
+
+The explicit `brave_search` tool keeps its existing modes and caller controls,
+including `web`, `context`/`llm` and `both`.
+
 Use `brave_search` when you need a Brave-specific capability:
 
 ```python
