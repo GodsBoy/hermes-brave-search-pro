@@ -17,56 +17,134 @@ hermes gateway restart
 ```
 
 This installs the backend into Hermes' plugin directory without enabling it.
-Because the plugin intentionally overrides Hermes' built-in `brave_search` tool,
-approve its declared `tools.override` capability when Hermes prompts. Hermes
-records the grant under `granted_capabilities`. Existing users with the legacy
-`allow_tool_override: true` setting keep working without a manual migration.
-This path works without Hermes Desktop.
+Hermes v0.21.1 accepts this plugin's installer manifest v1. Because the plugin
+intentionally overrides Hermes' built-in `brave_search` tool, approve its
+declared `tools.override` capability when Hermes prompts. Hermes records the
+grant under `granted_capabilities`. Existing users with the legacy
+`allow_tool_override: true` setting remain supported; the import migration
+deadline does not remove that permission setting.
+The `--no-enable` flag keeps activation separate. A TTY may still show installer
+capability prompts; to keep consent in the explicit enable phase, run
+installation non-interactively and then run `plugins enable` interactively.
+This path works without Hermes Desktop. Bare `hermes` commands target the
+selected profile; add `--profile default` to target the default explicitly.
+
+Check the installed plugin for deprecated internal imports before their
+removal on 2026-09-14:
+
+```bash
+hermes plugins compat
+```
+
+This checks enabled plugins in the selected profile. Follow the reported
+migration steps. This release has no deprecated import path
+hits. Do not enable `plugins.allow_deprecated_imports` to bypass migration.
 
 The original `v2026.8.31` Hermes tag predates bundled Tavily. If
 `hermes plugins list` does not show `web-tavily`, update Hermes before selecting
 `tavily` for extraction.
 
-## Direct user-plugin install
+## Update an existing installation
 
-You can also clone the repository directly into the user plugin directory:
+Use Hermes' native updater for an ordinary update, then restart the active
+gateway:
 
 ```bash
-git clone https://github.com/GodsBoy/hermes-brave-search-pro.git \
-  ~/.hermes/plugins/brave-search
-hermes plugins enable brave-search
+hermes plugins update brave-search
 hermes gateway restart
 ```
 
-For a profile-specific install:
+## Named profile install
+
+Use Hermes' native installer for a profile-specific install. Replace
+`myprofile` with the profile name and approve `tools.override` when Hermes
+prompts:
 
 ```bash
-git clone https://github.com/GodsBoy/hermes-brave-search-pro.git \
-  ~/.hermes/profiles/myprofile/plugins/brave-search
+hermes --profile myprofile plugins install GodsBoy/hermes-brave-search-pro --no-enable
 hermes --profile myprofile plugins enable brave-search
 hermes --profile myprofile gateway restart
 python3 ~/.hermes/profiles/myprofile/plugins/brave-search/scripts/doctor.py
 ```
 
-From an existing checkout, install a symlink:
+## Pinned release advancement
+
+Pinned installations deliberately refuse ordinary updates. Stage a new full
+40-character SHA through the native installer before changing a live profile:
 
 ```bash
-./scripts/install.sh
-hermes plugins enable brave-search
-hermes gateway restart
-
-# Optional profile-aware install
-HERMES_PROFILE=myprofile ./scripts/install.sh
-hermes --profile myprofile plugins enable brave-search
-hermes --profile myprofile gateway restart
-python3 ~/.hermes/profiles/myprofile/plugins/brave-search/scripts/doctor.py
+# Set release_sha to the verified release's full 40-character commit SHA.
+: "${release_sha:?Set the verified release SHA first}"
+staging_root="$(mktemp -d)"
+staging_home="$staging_root/profiles/staged"
+mkdir -p "$staging_home"
+HERMES_HOME="$staging_home" hermes plugins install \
+  GodsBoy/hermes-brave-search-pro --ref "$release_sha" --no-enable </dev/null
+HERMES_HOME="$staging_home" hermes plugins compat "$staging_home/plugins/brave-search"
+HERMES_HOME="$staging_home" hermes plugins enable brave-search
+git -C "$staging_home/plugins/brave-search" rev-parse HEAD
 ```
 
-`./scripts/install.sh` is a development helper that installs both
-profile-scoped links. It validates both destinations before creating either
-link, and refuses to replace an existing file, directory, or different symlink.
-Use the plugin-manager or direct-install flows above when you only need the
-backend.
+The `profiles/staged` parent matters: Hermes honours this explicit profile home
+instead of redirecting the command to a previously selected live profile. Keep
+the default owner-only permissions on the temporary root. Do not put backups
+inside the scanned plugin directory.
+
+Require a `safe` community scan, no compatibility hits, and a revision equal to
+`release_sha`. Approve only `tools.override` at the interactive enable prompt.
+Verify load and provider behaviour with credentials belonging to the intended
+profile; do not copy credentials from another profile.
+
+For deployment, stop only the affected gateway and preserve the live plugin,
+`config.yaml` and `plugins/.install-metadata.json` in an owner-only backup.
+Keep secret-bearing backup files at mode 0600. Move the existing plugin directory
+out of the live plugin path, then install the same SHA through the native
+installer. The installer refuses an existing directory without a bypass, so do
+not attempt to install over it or use ordinary update to move a pin.
+
+For the default profile, the native commands are:
+
+```bash
+hermes --profile default plugins install \
+  GodsBoy/hermes-brave-search-pro --ref "$release_sha" --no-enable </dev/null
+hermes --profile default plugins enable brave-search
+hermes --profile default plugins compat ~/.hermes/plugins/brave-search
+git -C ~/.hermes/plugins/brave-search rev-parse HEAD
+```
+
+For a named profile, replace `default` with its name and use its path under
+`~/.hermes/profiles/`. Read back the plugin's source, revision and pin in
+`plugins/.install-metadata.json`; require the source to be
+`https://github.com/GodsBoy/hermes-brave-search-pro.git` and the revision to equal
+`release_sha`. Verify that only Brave's enablement and consent changed in the
+live configuration. Never overwrite live config or other plugins' metadata
+with the staging home's files.
+
+After a successful load and search smoke, start the affected gateway. If any
+step fails, move the failed new plugin aside and restore the previous plugin,
+configuration and install metadata before starting that gateway. Verify the
+restored revision and load. Retain the backup until you explicitly retire the
+rollback path. The same procedure advances a later pin through fresh native
+scanning and consent.
+
+## Development symlink fixture
+
+Use `./scripts/install.sh` only with an isolated, disposable `HERMES_HOME` when
+testing an existing checkout. It creates backend and Desktop symlinks for that
+fixture and must not target a live Hermes profile:
+
+```bash
+fixture_root="$(mktemp -d)"
+fixture_home="$fixture_root/profiles/fixture"
+mkdir -p "$fixture_home"
+HERMES_HOME="$fixture_home" ./scripts/install.sh
+HERMES_HOME="$fixture_home" hermes plugins enable brave-search
+HERMES_HOME="$fixture_home" hermes plugins list
+```
+
+The helper validates both destinations and refuses to replace an existing file,
+directory, or different symlink. Use the native plugin installer for a
+persistent backend installation.
 
 ### Search plus extraction credentials
 
@@ -103,7 +181,7 @@ TAVILY_API_KEY=tvly-your-key-here
 
 ## Use Brave for search and Tavily for extract
 
-The `brave-search` plugin registers Brave Pro for search. Current Hermes v0.21.0
+The `brave-search` plugin registers Brave Pro for search. Current Hermes v0.21.1
 git builds bundle `web-tavily` and own the `tavily` provider for extraction. If Brave
 is credentialed, missing or still-free web search settings are moved to Brave
 Pro. Existing extraction settings are preserved; select Tavily explicitly when

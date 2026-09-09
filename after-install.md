@@ -1,6 +1,6 @@
 # Brave Search Pro installed
 
-This plugin works best with Brave for search. Current Hermes v0.21.0 git builds
+This plugin works best with Brave for search. Current Hermes v0.21.1 git builds
 own the bundled `web-tavily` provider for `web_extract`; `TAVILY_API_KEY` remains
 a separate optional credential. Hermes Desktop is also optional: finish the
 backend setup first, then add the local renderer only if you want the Desktop
@@ -13,11 +13,17 @@ Hermes prompts, then restart the active gateway. Use the same profile for every
 backend command. Hermes records consent under `granted_capabilities`; the legacy
 `allow_tool_override: true` setting remains valid for existing users.
 
+Hermes v0.21.1 accepts this plugin's installer manifest v1. Run the compatibility
+check for the same profile before the deprecated import paths are removed on
+2026-09-14. This release has no deprecated import path hits. Follow any reported
+migration steps; do not enable `plugins.allow_deprecated_imports` as a bypass.
+
 ### Default profile
 
 ```bash
-hermes plugins enable brave-search
-hermes gateway restart
+hermes --profile default plugins enable brave-search
+hermes --profile default plugins compat
+hermes --profile default gateway restart
 ```
 
 ### Named profile
@@ -27,6 +33,7 @@ enable command, and gateway restart must all use that same profile.
 
 ```bash
 hermes --profile myprofile plugins enable brave-search
+hermes --profile myprofile plugins compat
 hermes --profile myprofile gateway restart
 ```
 

@@ -71,7 +71,7 @@ def test_release_metadata_is_aligned():
         if package["name"] == project["name"]
     )
 
-    assert package_version == "0.2.0"
+    assert package_version == "0.2.1"
     assert f"version: {package_version}\n" in (root / "plugin.yaml").read_text()
     dashboard_manifest = json.loads(
         (root / "dashboard" / "manifest.json").read_text()
@@ -92,7 +92,7 @@ def test_release_metadata_is_aligned():
 def test_plugin_manifest_only_requires_brave_key():
     plugin_manifest = (Path(__file__).resolve().parents[1] / "plugin.yaml").read_text()
 
-    assert "manifest_version: 2" in plugin_manifest
+    assert "manifest_version: 1" in plugin_manifest
     assert "api_version: 1" in plugin_manifest
     assert "BRAVE_SEARCH_API_KEY" in plugin_manifest
     assert "TAVILY_API_KEY" not in plugin_manifest
