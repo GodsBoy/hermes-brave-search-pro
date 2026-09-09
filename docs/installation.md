@@ -33,10 +33,11 @@ Check the installed plugin for deprecated internal imports before their
 removal on 2026-09-14:
 
 ```bash
-hermes plugins compat ~/.hermes/plugins/brave-search
+hermes plugins compat
 ```
 
-Follow the reported migration steps. This release has no deprecated import path
+This checks enabled plugins in the selected profile. Follow the reported
+migration steps. This release has no deprecated import path
 hits. Do not enable `plugins.allow_deprecated_imports` to bypass migration.
 
 The original `v2026.8.31` Hermes tag predates bundled Tavily. If

@@ -69,15 +69,22 @@ def test_profile_guidance_uses_native_install_before_optional_desktop() -> None:
 
 
 def test_hermes_manifest_and_migration_guidance_is_explicit() -> None:
-    for path in (ROOT / "README.md", ROOT / "docs" / "installation.md"):
+    for path in (
+        ROOT / "README.md", ROOT / "docs" / "installation.md", ROOT / "after-install.md"
+    ):
         text = read(path)
         assert "Hermes v0.21.1" in text
         assert "installer manifest v1" in text
         assert "tools.override" in text
-        assert "hermes plugins compat" in text
+        assert "plugins compat" in text
         assert "2026-09-14" in text
         assert "deprecated" in text.lower()
         assert "import path" in text
+
+    for path in (ROOT / "README.md", ROOT / "docs" / "installation.md"):
+        text = read(path)
+        assert re.search(r"(?m)^hermes plugins compat$", text)
+        assert "hermes plugins compat ~/.hermes/plugins/brave-search" not in text
 
 
 def test_update_and_pinned_release_guidance_uses_staging_and_rollback() -> None:
@@ -202,8 +209,9 @@ def test_after_install_includes_matching_default_and_named_profile_flows() -> No
     assert_in_order(
         text,
         "### Default profile",
-        "hermes plugins enable brave-search",
-        "hermes gateway restart",
+        "hermes --profile default plugins enable brave-search",
+        "hermes --profile default plugins compat",
+        "hermes --profile default gateway restart",
         "## Desktop Brave Search",
         "~/.hermes/plugins/brave-search/scripts/install-desktop.sh",
     )
@@ -212,6 +220,7 @@ def test_after_install_includes_matching_default_and_named_profile_flows() -> No
         "### Named profile",
         "hermes --profile myprofile plugins enable ",
         "brave-search",
+        "hermes --profile myprofile plugins compat",
         "hermes --profile myprofile gateway restart",
         "## Desktop Brave Search",
         "~/.hermes/profiles/myprofile/plugins/brave-search/scripts/install-desktop.sh",

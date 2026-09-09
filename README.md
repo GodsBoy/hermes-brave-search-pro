@@ -51,10 +51,11 @@ interactively. Check the installed plugin for deprecated internal imports
 before their removal on 2026-09-14:
 
 ```bash
-hermes plugins compat ~/.hermes/plugins/brave-search
+hermes plugins compat
 ```
 
-Follow the reported migration steps. This release has no deprecated import path
+This checks enabled plugins in the selected profile. Follow the reported
+migration steps. This release has no deprecated import path
 hits. Do not enable `plugins.allow_deprecated_imports` to bypass migration.
 
 Bare `hermes` commands target the selected profile. Add `--profile default`
