@@ -36,21 +36,25 @@ jobs:
   hermes-integration:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        hermes-ref: [main, v2026.9.7]
     steps:
       - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v8.2.0
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - name: Install plugin and current Hermes
+      - name: Install plugin and Hermes
         run: |
           uv venv --python "3.12"
           uv pip install -e '.[dev]'
-          git clone --depth 1 \
+          git clone --depth 1 --branch "${{ matrix.hermes-ref }}" \
             https://github.com/NousResearch/hermes-agent.git \
             "$RUNNER_TEMP/hermes-agent"
           uv pip install -e "$RUNNER_TEMP/hermes-agent"
           npm --prefix "$RUNNER_TEMP/hermes-agent" ci \
             --workspace apps/desktop --ignore-scripts
-      - name: Test current Hermes integrations
-        run: uv run pytest tests/test_hermes_plugin_manager.py tests/test_desktop_hermes_integration.py tests/test_hermes_web_search.py
+      - name: Test Hermes integrations and distribution
+        run: uv run pytest tests/test_hermes_plugin_manager.py tests/test_desktop_hermes_integration.py tests/test_hermes_web_search.py tests/test_distribution.py

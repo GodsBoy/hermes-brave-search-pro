@@ -42,22 +42,13 @@ def test_fresh_install_guidance_completes_backend_before_optional_desktop() -> N
         )
 
 
-def test_direct_and_profile_guidance_complete_backend_before_optional_desktop() -> None:
+def test_profile_guidance_uses_native_install_before_optional_desktop() -> None:
     for path in (ROOT / "README.md", ROOT / "docs" / "installation.md"):
         text = read(path)
         assert_in_order(
             text,
-            "git clone https://github.com/GodsBoy/hermes-brave-search-pro.git \\\n"
-            "  ~/.hermes/plugins/brave-search",
-            "hermes plugins enable brave-search",
-            "hermes gateway restart",
-            "## Desktop Brave Search",
-            "~/.hermes/plugins/brave-search/scripts/install-desktop.sh",
-        )
-        assert_in_order(
-            text,
-            "git clone https://github.com/GodsBoy/hermes-brave-search-pro.git \\\n"
-            "  ~/.hermes/profiles/myprofile/plugins/brave-search",
+            "hermes --profile myprofile plugins install "
+            "GodsBoy/hermes-brave-search-pro --no-enable",
             "hermes --profile myprofile plugins enable brave-search",
             "hermes --profile myprofile gateway restart",
             "python3 ~/.hermes/profiles/myprofile/plugins/brave-search/"
@@ -67,6 +58,67 @@ def test_direct_and_profile_guidance_complete_backend_before_optional_desktop() 
             "  ~/.hermes/profiles/myprofile/plugins/brave-search/"
             "scripts/install-desktop.sh",
         )
+        assert (
+            "git clone https://github.com/GodsBoy/hermes-brave-search-pro.git \\\n"
+            "  ~/.hermes/plugins/brave-search"
+        ) not in text
+        assert (
+            "git clone https://github.com/GodsBoy/hermes-brave-search-pro.git \\\n"
+            "  ~/.hermes/profiles/myprofile/plugins/brave-search"
+        ) not in text
+
+
+def test_hermes_manifest_and_migration_guidance_is_explicit() -> None:
+    for path in (ROOT / "README.md", ROOT / "docs" / "installation.md"):
+        text = read(path)
+        assert "Hermes v0.21.1" in text
+        assert "installer manifest v1" in text
+        assert "tools.override" in text
+        assert "hermes plugins compat" in text
+        assert "2026-09-14" in text
+        assert "deprecated" in text.lower()
+        assert "import path" in text
+
+
+def test_update_and_pinned_release_guidance_uses_staging_and_rollback() -> None:
+    text = read(ROOT / "docs" / "installation.md")
+    assert_in_order(
+        text,
+        "hermes plugins update brave-search",
+        "Pinned release advancement",
+        'staging_home="$staging_root/profiles/staged"',
+        'HERMES_HOME="$staging_home" hermes plugins install',
+        '--ref "$release_sha" --no-enable </dev/null',
+        'HERMES_HOME="$staging_home" hermes plugins compat',
+        'HERMES_HOME="$staging_home" hermes plugins enable brave-search',
+        'hermes --profile default plugins install',
+        'hermes --profile default plugins enable brave-search',
+    )
+    start = text.index("Pinned release advancement")
+    end = text.index("Development symlink fixture", start)
+    pinned = text[start:end]
+    assert "--force" not in pinned
+    assert "tools.override" in pinned
+    assert "`safe`" in pinned
+    assert "plugins/.install-metadata.json" in pinned
+    assert "restore the previous plugin" in pinned
+    assert "Never overwrite live config" in pinned
+    assert "docs/installation.md#pinned-release-advancement" in read(ROOT / "README.md")
+
+
+def test_development_symlink_guidance_is_an_isolated_disposable_fixture() -> None:
+    for path in (ROOT / "README.md", ROOT / "docs" / "installation.md"):
+        text = read(path)
+        assert_in_order(
+            text,
+            "Development symlink fixture",
+            'fixture_home="$fixture_root/profiles/fixture"',
+            'HERMES_HOME=\"$fixture_home\" ./scripts/install.sh',
+            'HERMES_HOME=\"$fixture_home\" hermes plugins enable brave-search',
+            'HERMES_HOME="$fixture_home" hermes plugins list',
+        )
+        assert "isolated, disposable `HERMES_HOME`" in text
+        assert re.search(r"^\./scripts/install\.sh(?:\s|$)", text, re.MULTILINE) is None
 
 
 def test_install_examples_use_capability_consent_flow() -> None:

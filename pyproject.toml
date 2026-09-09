@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "hermes-brave-search"
-version = "0.2.0"
+version = "0.2.1"
 description = "Brave Search Pro provider and advanced Brave search tool for Hermes Agent"
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
@@ -37,6 +37,16 @@ brave-search = "hermes_brave_search"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/hermes_brave_search"]
+
+[tool.hatch.build.targets.sdist]
+# Keep local caches and verification homes out, including Git-local exclusions
+# that the build backend does not honour. Retain source and all meaningful tests.
+only-include = [
+  "src", "tests", "scripts", "dashboard", "desktop", "examples", ".github",
+  "docs/assets", "docs/installation.md", "docs/security-scanning.md",
+  "__init__.py", "plugin.yaml", "after-install.md", "pyproject.toml",
+  "uv.lock", "README.md", "CONTRIBUTING.md", "LICENSE",
+]
 
 [tool.pytest.ini_options]
 addopts = "-q"
